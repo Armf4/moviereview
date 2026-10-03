@@ -1429,7 +1429,7 @@ $('#sdOk').addEventListener('click', async () => {
     }
     if(!byCat && fid !== '__new'){ try{ localStorage.setItem('lastFolder', fid); }catch(e){} }
     saveDlg.close(); toast(`บันทึก ${list.length} รูปลงคลังแล้ว`); refreshLibCount();
-  }catch(e){ toast('บันทึกไม่สำเร็จ — พื้นที่เบราว์เซอร์อาจเต็ม'); }
+  }catch(e){ console.error(e); toast('บันทึกไม่สำเร็จ: ' + (e && e.message ? e.message : e)); }
   btn.disabled = false;
 });
 
@@ -1646,7 +1646,7 @@ $('#autoSaveBtn').addEventListener('click', async () => {
     }
     refreshLibCount();
     toast('บันทึกแล้ว → ' + Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · '), 5000);
-  }catch(e){ toast('บันทึกไม่สำเร็จ — พื้นที่เบราว์เซอร์อาจเต็ม'); }
+  }catch(e){ console.error(e); toast('บันทึกไม่สำเร็จ: ' + (e && e.message ? e.message : e)); }
   btn.textContent = label; btn.disabled = S.posters.length === 0;
 });
 
