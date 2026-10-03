@@ -657,7 +657,7 @@ function catAccent(p){ return (S.catColor && p.cat) ? CAT_COLOR[p.cat] : null; }
 function dressMovie(p, m){
   p.movie = m; p.cat = m.cat;
   const set = (type, text) => { const e = p.els.find(x => x.type === type); if(e){ e.text = text; delete e.wrap; } };
-  set('title', m.title); set('score', m.score); set('caption', m.caption);
+  set('title', m.title); set('score', m.score); set('caption', m.caption); set('cta', `หนังแนว ${m.cat}`);
   const a = catAccent(p); if(a) setAccent(p, a);
 }
 
@@ -747,6 +747,8 @@ function movieBlock(p){
   sel.value = p.cat || '';
   sel.addEventListener('change', () => {
     p.cat = sel.value || null;
+    const ct = p.els.find(x => x.type === 'cta');
+    if(ct && p.cat && (/^หนังแนว /.test(ct.text) || /Prime Video/.test(ct.text))) ct.text = `หนังแนว ${p.cat}`;
     const a = catAccent(p); if(a) setAccent(p, a);
     invalidate(); drawThumb(p);
   });
