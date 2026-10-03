@@ -53,7 +53,7 @@
   /* liquid navbar */
   .tabs{
     position:fixed; left:50%; bottom:calc(12px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); z-index:40;
-    width:min(460px, calc(100% - 24px)); display:flex; padding:6px; border-radius:999px;
+    width:min(580px, calc(100% - 24px)); display:flex; padding:6px; border-radius:999px;
     background:rgba(28,19,17,.62); -webkit-backdrop-filter:blur(16px) saturate(1.5); backdrop-filter:blur(16px) saturate(1.5);
     border:1px solid rgba(255,255,255,.1); box-shadow:0 10px 32px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.07);
     --x:6px; --w:100px;
@@ -176,6 +176,22 @@
   details.mv > :not(summary){margin-top:8px;}
   .toolbar .opts{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; min-width:200px;}
 
+  /* movies list */
+  #viewMovies{max-width:1280px; margin:0 auto; padding:0 16px 40px;}
+  .prog{height:8px; background:#2a1e1c; border-radius:99px; overflow:hidden; margin:6px 0 14px;}
+  .prog i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .3s;}
+  .mgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px;}
+  .mv-card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:flex; flex-direction:column; gap:8px;}
+  .mv-card.done{opacity:.55;}
+  .mv-card.done .mt{text-decoration:line-through;}
+  .mv-top{display:flex; align-items:center; gap:8px;}
+  .mv-top input{width:18px; height:18px; accent-color:var(--accent2); cursor:pointer;}
+  .mv-top .sc{margin-left:auto; font-weight:800; color:var(--accent2);}
+  .ctag{font-size:.7rem; font-weight:600; padding:2px 9px; border-radius:99px; color:#fff;}
+  .mv-card .mt{font-weight:800; font-size:1rem; overflow-wrap:anywhere;}
+  .mv-card .mc{font-size:.85rem; color:var(--muted); font-style:italic; line-height:1.5; flex:1;}
+  .mv-card .btns{display:flex; gap:6px; flex-wrap:wrap;}
+
   @media (max-width:1000px){
     #viewEditor{grid-template-columns:1fr;}
     .stage{order:1;} .strip{order:2;} .inspector{order:3;}
@@ -205,6 +221,10 @@
     <button type="button" data-view="editor">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M12 8v8M8 12h8"/></svg>
       <span>สร้างโปสเตอร์</span>
+    </button>
+    <button type="button" data-view="movies">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 4.5v15M16.5 4.5v15M3.5 9h4M3.5 15h4M16.5 9h4M16.5 15h4"/></svg>
+      <span>รายการหนัง</span>
     </button>
     <button type="button" data-view="library">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
@@ -289,6 +309,23 @@
   <aside class="panel inspector" id="inspector" aria-label="ปรับแต่ง"></aside>
 </main>
 
+<!-- ============ MOVIES ============ -->
+<main id="viewMovies" hidden>
+  <section class="hero">
+    <div>
+      <h2>รายการหนัง</h2>
+      <div class="hint" id="mvSub"></div>
+    </div>
+    <div class="search"><input type="search" id="mvQ" placeholder="ค้นหาชื่อหนัง / แคปชั่น…" aria-label="ค้นหาหนัง" autocomplete="off"></div>
+  </section>
+  <div class="prog" aria-hidden="true"><i id="mvBar"></i></div>
+  <div class="homebar">
+    <div class="chips" id="mvChips"></div>
+    <label class="check"><input type="checkbox" id="mvHideDone"> ซ่อนเรื่องที่ทำแล้ว</label>
+  </div>
+  <div id="mvBody"></div>
+</main>
+
 <!-- ============ LIBRARY ============ -->
 <main id="viewLibrary" hidden>
   <div class="libhead" id="libHead"></div>
@@ -330,6 +367,7 @@
 <input type="file" id="fileInput" accept="image/*" multiple hidden>
 <input type="file" id="logoInput" accept="image/*" hidden>
 <input type="file" id="replaceInput" accept="image/*" hidden>
+<input type="file" id="movieFileInput" accept="image/*" hidden>
 
 <script>
 'use strict';
@@ -1334,6 +1372,7 @@ async function saveItem(p, folderId, over){
   await DB.put('items', {id, folderId, name:fileBase(p), createdAt, updatedAt:Date.now(), w:ex.w, h:ex.h, mime:ex.mime,
     thumb:thumbURL(p), state:{bg:p.bg, els:cleanEls(p.els), size:S.size, cat:p.cat || null, movieId:p.movie ? p.movie.id : null}});
   p.srcItemId = id;
+  if(p.movie) markDone(p.movie.id, true);
 }
 $('#sdOk').addEventListener('click', async () => {
   const btn = $('#sdOk'); btn.disabled = true;
@@ -1523,10 +1562,10 @@ $('#homeSort').addEventListener('change', e => { H.sort = e.target.value; render
 ================================================================ */
 function switchView(v){
   S.view = v;
-  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library';
+  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library'; $('#viewMovies').hidden = v !== 'movies';
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   moveBlob();
-  if(v === 'library') renderLibrary(); else if(v === 'home') loadHome(); else invalidate();
+  if(v === 'library') renderLibrary(); else if(v === 'home') loadHome(); else if(v === 'movies') renderMovies(); else invalidate();
 }
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 function moveBlob(instant){
@@ -1572,6 +1611,61 @@ $('#autoSaveBtn').addEventListener('click', async () => {
     toast('บันทึกแล้ว → ' + Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · '), 5000);
   }catch(e){ toast('บันทึกไม่สำเร็จ — พื้นที่เบราว์เซอร์อาจเต็ม'); }
   btn.textContent = label; btn.disabled = S.posters.length === 0;
+});
+
+/* ================================================================
+   แท็บ "รายการหนัง" — ข้อมูลจากไฟล์ movie_review_manager
+================================================================ */
+const MV = {cat:'all', q:'', hide:false, pick:null};
+let doneIds = [];
+try{ doneIds = JSON.parse(localStorage.getItem('movie_completed_ids')) || []; }catch(e){}
+function markDone(id, on){
+  const has = doneIds.includes(id);
+  if(on && !has) doneIds.push(id); else if(!on && has) doneIds = doneIds.filter(x => x !== id);
+  try{ localStorage.setItem('movie_completed_ids', JSON.stringify(doneIds)); }catch(e){}
+}
+function renderMovies(){
+  const body = $('#mvBody'), chips = $('#mvChips'); body.replaceChildren(); chips.replaceChildren();
+  const total = MOVIES.length, n = MOVIES.filter(m => doneIds.includes(m.id)).length, pct = Math.round(n/total*100);
+  $('#mvSub').textContent = `ทำโปสเตอร์แล้ว ${n} / ${total} เรื่อง (${pct}%)`;
+  $('#mvBar').style.width = pct + '%';
+  const mk = (id, label) => el('button', {type:'button', class:'chip' + (MV.cat === id ? ' on' : ''), textContent:label,
+    on:{click:() => { MV.cat = id; renderMovies(); }}});
+  chips.append(mk('all', `ทั้งหมด (${total})`), ...CATS.map(c => mk(c, `${c} (${MOVIES.filter(m => m.cat === c).length})`)));
+  const terms = MV.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const list = MOVIES.filter(m => (MV.cat === 'all' || m.cat === MV.cat) && !(MV.hide && doneIds.includes(m.id))
+    && terms.every(t => (m.title + ' ' + m.caption + ' ' + m.cat + ' ' + (m.year || '')).toLowerCase().includes(t)));
+  if(!list.length){ body.append(el('div', {class:'empty', textContent:'ไม่พบหนังที่ค้นหา'})); return; }
+  const grid = el('div', {class:'mgrid'});
+  list.forEach(m => {
+    const done = doneIds.includes(m.id);
+    const cb = el('input', {type:'checkbox', checked:done, 'aria-label':'ทำโปสเตอร์แล้ว', on:{change:e => { markDone(m.id, e.target.checked); renderMovies(); }}});
+    grid.append(el('article', {class:'mv-card' + (done ? ' done' : '')},
+      el('div', {class:'mv-top'}, cb, el('span', {class:'ctag', textContent:m.cat, style:`background:${CAT_COLOR[m.cat]}`}), el('span', {class:'sc', textContent:m.score})),
+      el('div', {class:'mt', textContent:m.title + (m.year ? ` (${m.year})` : '')}),
+      el('div', {class:'mc', textContent:`“${m.caption}”`}),
+      el('div', {class:'btns'},
+        el('button', {type:'button', class:'small', textContent:'🎨 สร้างโปสเตอร์', title:'เลือกรูป แล้วระบบใส่ข้อมูลหนังเรื่องนี้ + จัดเลย์เอาต์ให้อัตโนมัติ', on:{click:() => { MV.pick = m; $('#movieFileInput').click(); }}}),
+        el('button', {type:'button', class:'secondary small', textContent:'คัดลอก', on:{click:() => {
+          const t = `${m.title}${m.year ? ' (' + m.year + ')' : ''}\nคะแนน: ${m.score}\nแคปชั่น: "${m.caption}"`;
+          (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('คัดลอกข้อมูลแล้ว'), () => toast('คัดลอกไม่สำเร็จ'));
+        }}}))));
+  });
+  body.append(grid);
+}
+$('#mvQ').addEventListener('input', e => { MV.q = e.target.value; renderMovies(); });
+$('#mvHideDone').addEventListener('change', e => { MV.hide = e.target.checked; renderMovies(); });
+$('#movieFileInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; const m = MV.pick; MV.pick = null;
+  if(!f || !m) return;
+  try{
+    await ensureFonts();
+    const p = newPoster(await blobToImg(f), f, f.name);
+    dressMovie(p, m); autoLayout(p);
+    S.posters.push(p); S.sel = 'bg';
+    switchView('editor'); setCur(p.id);
+    toast(`สร้างโปสเตอร์ “${m.title}” แล้ว · กด ⚡ บันทึกทั้งหมดตามประเภท เพื่อเข้าโฟลเดอร์ ${m.cat}`, 5000);
+  }catch(err){ toast('เปิดรูปไม่ได้'); }
 });
 
 document.fonts.addEventListener('loadingdone', () => { invalidate(); drawAllThumbs(); });
