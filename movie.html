@@ -146,14 +146,14 @@
   .search input{font-size:1.05rem; padding:12px 16px; border-radius:12px;}
   .homebar{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:16px;}
   .homebar select{width:auto; min-width:140px;}
-  .masonry{column-width:210px; column-gap:14px;}
-  .mcard{break-inside:avoid; display:inline-block; width:100%; margin:0 0 14px; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
-  .mcard .pic{display:block; cursor:pointer; background:#000;}
-  .mcard .pic img{display:block; width:100%; height:auto;}
+  .masonry{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; align-items:stretch;}
+  .mcard{display:flex; flex-direction:column; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
+  .mcard .pic{display:block; cursor:pointer; background:#000; aspect-ratio:4/5; overflow:hidden;}
+  .mcard .pic img{display:block; width:100%; height:100%; object-fit:contain;}
   .mcard .info{padding:10px 12px 4px;}
-  .mcard .info b{display:block; font-size:.92rem; overflow-wrap:anywhere;}
+  .mcard .info b{display:block; font-size:.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .mcard .info span{font-size:.72rem; color:var(--muted);}
-  .mcard .btns{display:flex; gap:6px; padding:8px 12px 12px;}
+  .mcard .btns{display:flex; gap:6px; padding:8px 12px 12px; margin-top:auto;}
 
   dialog{background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:18px; width:min(420px,92vw);}
   dialog::backdrop{background:rgba(0,0,0,.68);}
@@ -211,6 +211,37 @@
     .thumb{width:104px;}
   }
   @media (prefers-reduced-motion:reduce){ #toast{transition:none;} .tabs .blob,.tabs .glow,.tabs button svg{transition:none !important;} }
+
+  /* ================================================================
+     เอฟเฟกต์ปุ่มสไตล์เดียวกับแถบเมนูด้านล่าง (สปริง + เรืองแสง + ระลอกน้ำ)
+  ================================================================ */
+  :root{ --spring:cubic-bezier(.34,1.45,.55,1); --spring2:cubic-bezier(.25,.9,.35,1); }
+  button{
+    position:relative; overflow:hidden; isolation:isolate; -webkit-tap-highlight-color:transparent;
+    transition:transform .4s var(--spring), box-shadow .4s var(--spring), background-color .3s, color .3s, border-color .3s, filter .2s;
+  }
+  /* ปุ่มหลักสีแดง: ไล่สีแบบเดียวกับก้อนสีของแถบเมนู */
+  button:where(:not(.secondary, .danger, .chip)){
+    background:radial-gradient(120% 140% at 50% 30%, #ff6a7d 0%, #e0212b 55%, #b3121d 100%);
+    box-shadow:0 3px 12px rgba(224,33,43,.28);
+  }
+  button:where(:not(.secondary, .danger, .chip)):hover{ box-shadow:0 6px 22px rgba(255,59,78,.5); }
+  button.secondary:hover{ border-color:#7a4a44; box-shadow:0 5px 16px rgba(255,59,78,.16); }
+  button.danger:hover{ box-shadow:0 5px 18px rgba(224,33,43,.35); }
+  .chip:hover{ border-color:#7a4a44; }
+  .chip.on{ box-shadow:0 4px 16px rgba(242,196,14,.38); }
+  .seg button.on{ background:radial-gradient(120% 140% at 50% 30%, #ff6a7d 0%, #e0212b 55%, #b3121d 100%); box-shadow:0 0 14px rgba(255,59,78,.45) inset, 0 0 12px rgba(255,59,78,.3); }
+  button:hover:not(:disabled){ transform:translateY(-1px); }
+  button:active:not(:disabled){ transform:translateY(0) scale(.93); transition-duration:.12s; }
+  /* แถบเมนูด้านล่างมีเอฟเฟกต์ของตัวเองอยู่แล้ว ไม่ต้องซ้ำ */
+  .tabs button, .tabs button:hover, .tabs button:active{ transform:none; box-shadow:none; overflow:visible; background:none; }
+  .ripple{
+    position:absolute; z-index:-1; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,255,255,.6) 0%, rgba(255,255,255,0) 68%);
+    transform:scale(0); opacity:.9; animation:ripple .65s var(--spring2) forwards;
+  }
+  @keyframes ripple{ to{ transform:scale(1); opacity:0; } }
+  @media (prefers-reduced-motion:reduce){ button{ transition:none !important; } .ripple{ display:none; } }
 </style>
 </head>
 <body>
@@ -1637,6 +1668,18 @@ function moveBlob(instant){
   nav.style.setProperty('--w', (b.offsetWidth - 8) + 'px');
   if(instant){ void nav.offsetWidth; nav.classList.remove('noanim'); }
 }
+/* เอฟเฟกต์ระลอกเมื่อกดปุ่ม */
+document.addEventListener('pointerdown', ev => {
+  const b = ev.target.closest && ev.target.closest('button');
+  if(!b || b.disabled || b.closest('.tabs')) return;
+  const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2.2;
+  const s = document.createElement('span'); s.className = 'ripple';
+  s.style.width = s.style.height = d + 'px';
+  s.style.left = (ev.clientX - r.left - d/2) + 'px';
+  s.style.top = (ev.clientY - r.top - d/2) + 'px';
+  b.appendChild(s);
+  setTimeout(() => s.remove(), 700);
+}, {passive:true});
 moveBlob(true);
 new ResizeObserver(() => moveBlob(true)).observe($('#tabs'));
 
