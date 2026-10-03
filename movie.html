@@ -1306,39 +1306,62 @@ async function makeZip(files){
 }
 
 /* ================================================================
-   ฐานข้อมูลในเบราว์เซอร์ (IndexedDB)
+   ฐานข้อมูลกลาง (Vercel Blob) - ทุกคนเห็นข้อมูลเดียวกัน
    โครงสร้างแยก "ข้อมูลเบา" (folders/items) ออกจากไฟล์ภาพ (blobs)
    ถ้าจะย้ายไปเก็บบนเซิร์ฟเวอร์ภายหลัง แก้เฉพาะออบเจ็กต์ DB นี้
 ================================================================ */
 const DB = {
   db: null,
-  open(){
-    return new Promise((res, rej) => {
-      if(!window.indexedDB){ rej(new Error('no idb')); return; }
-      const r = indexedDB.open('movie-poster-studio', 1);
-      r.onupgradeneeded = () => {
-        const d = r.result;
-        d.createObjectStore('folders', {keyPath:'id'});
-        d.createObjectStore('items', {keyPath:'id'});
-        d.createObjectStore('blobs', {keyPath:'id'});
-        d.createObjectStore('meta', {keyPath:'k'});
-      };
-      r.onsuccess = () => { this.db = r.result; res(); };
-      r.onerror = () => rej(r.error);
+  async api(method, qs, body){
+    const r = await fetch('/api/kv?' + qs, {
+      method,
+      headers: body ? {'Content-Type':'application/json'} : undefined,
+      body: body ? JSON.stringify(body) : undefined
     });
+    if(!r.ok) throw new Error('api ' + r.status);
+    return r.json();
   },
-  run(store, mode, fn){
-    return new Promise((res, rej) => {
-      if(!this.db){ rej(new Error('no db')); return; }
-      const t = this.db.transaction(store, mode), rq = fn(t.objectStore(store));
-      t.oncomplete = () => res(rq ? rq.result : undefined);
-      t.onerror = t.onabort = () => rej(t.error);
-    });
+  async open(){
+    await this.api('GET', 'ping=1');
+    this.db = true;
   },
-  all(s){ return this.run(s, 'readonly', o => o.getAll()); },
-  get(s, k){ return this.run(s, 'readonly', o => o.get(k)); },
-  put(s, v){ return this.run(s, 'readwrite', o => o.put(v)); },
-  del(s, k){ return this.run(s, 'readwrite', o => o.delete(k)); }
+  keyOf(s, v){ return s === 'meta' ? v.k : v.id; },
+  async hydrate(data){
+    const out = {...data};
+    await Promise.all(Object.keys(out).map(async f => {
+      const m = out[f];
+      if(m && typeof m === 'object' && m.__blob){
+        const r = await fetch(`${m.__blob}?v=${m.v || 0}`);
+        out[f] = r.ok ? await r.blob() : undefined;
+      }
+    }));
+    return out;
+  },
+  async all(s){
+    const rows = await this.api('GET', 'store=' + s);
+    return Promise.all(rows.map(d => this.hydrate(d)));
+  },
+  async get(s, k){
+    const d = await this.api('GET', `store=${s}&k=${encodeURIComponent(k)}`);
+    return d ? this.hydrate(d) : undefined;
+  },
+  async put(s, v){
+    const k = String(this.keyOf(s, v)), data = {...v}, now = Date.now();
+    const { upload } = await import('https://esm.sh/@vercel/blob@1.1.0/client');
+    for(const f of Object.keys(data)){
+      if(data[f] instanceof Blob){
+        const res = await upload(`files/${s}/${k.replace(/[^\w-]/g, '_')}/${f}`, data[f], {
+          access:'public', handleUploadUrl:'/api/blob-upload',
+          contentType:data[f].type || 'image/png', multipart:data[f].size > 5e6
+        });
+        data[f] = {__blob:res.url, type:data[f].type, v:now};
+      } else if(data[f] === undefined) delete data[f];
+    }
+    await this.api('PUT', 'store=' + s, {k, data});
+  },
+  async del(s, k){
+    await this.api('DELETE', `store=${s}&k=${encodeURIComponent(k)}`);
+  }
 };
 
 /* ================================================================

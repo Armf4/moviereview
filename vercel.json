@@ -1,5 +1,5 @@
 {
-  "routes": [
-    { "src": "/", "destination": "movie.html" }
+  "rewrites": [
+    { "source": "/", "destination": "/movie.html" }
   ]
 }
