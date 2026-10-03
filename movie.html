@@ -192,6 +192,18 @@
   .mv-card .mc{font-size:.85rem; color:var(--muted); font-style:italic; line-height:1.5; flex:1;}
   .mv-card .btns{display:flex; gap:6px; flex-wrap:wrap;}
 
+  .mgrid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));}
+  .mv-card{padding:0; overflow:hidden; gap:0;}
+  .cov{position:relative; aspect-ratio:2/3; background:linear-gradient(160deg,var(--c,#333),#0b0b0d); cursor:pointer; overflow:hidden;}
+  .cov img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
+  .cov .ph{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:2.4rem; opacity:.5;}
+  .cov.has .ph{display:none;}
+  .cov .ctag{position:absolute; top:8px; left:8px; z-index:1;}
+  .cov .sc{position:absolute; top:8px; right:8px; z-index:1; margin:0; background:rgba(0,0,0,.72); padding:2px 8px; border-radius:99px; font-weight:800; color:var(--accent2); font-size:.8rem;}
+  .mv-body{padding:10px 12px 12px; display:flex; flex-direction:column; gap:8px; flex:1;}
+  .mv-card .mc{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
+  .mv-body .btns{align-items:center;}
+
   @media (max-width:1000px){
     #viewEditor{grid-template-columns:1fr;}
     .stage{order:1;} .strip{order:2;} .inspector{order:3;}
@@ -1565,7 +1577,7 @@ function switchView(v){
   $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library'; $('#viewMovies').hidden = v !== 'movies';
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   moveBlob();
-  if(v === 'library') renderLibrary(); else if(v === 'home') loadHome(); else if(v === 'movies') renderMovies(); else invalidate();
+  if(v === 'library') renderLibrary(); else if(v === 'home') loadHome(); else if(v === 'movies') loadCustomCovers().then(renderMovies); else invalidate();
 }
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 function moveBlob(instant){
@@ -1624,8 +1636,78 @@ function markDone(id, on){
   if(on && !has) doneIds.push(id); else if(!on && has) doneIds = doneIds.filter(x => x !== id);
   try{ localStorage.setItem('movie_completed_ids', JSON.stringify(doneIds)); }catch(e){}
 }
+const COVER_KEY = 'movie_cover_urls';
+let COVER_URL = {}; try{ COVER_URL = JSON.parse(localStorage.getItem(COVER_KEY)) || {}; }catch(e){}
+const CUSTOM = {}, COVER_FAIL = new Set();
+const saveCoverUrls = () => { try{ localStorage.setItem(COVER_KEY, JSON.stringify(COVER_URL)); }catch(e){} };
+const coverSrc = m => (CUSTOM[m.id] && CUSTOM[m.id].url) || COVER_URL[m.id] || null;
+async function loadCustomCovers(){
+  if(!DB.db) return;
+  try{ (await DB.all('meta')).forEach(r => { if(String(r.k).startsWith('cover:') && r.blob){ const id = +r.k.slice(6); if(!CUSTOM[id]) CUSTOM[id] = {blob:r.blob, url:URL.createObjectURL(r.blob)}; } }); }catch(e){}
+}
+// หารูปปกจาก Wikipedia (โปสเตอร์หนังคือรูปหลักของบทความ) — ไม่ต้องใช้ API key
+async function findCoverUrl(m){
+  const q = `${m.title} ${m.year || ''} film`.replace(/\s+/g, ' ').trim();
+  const u = 'https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=0&gsrlimit=8&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilimit=8&gsrsearch=' + encodeURIComponent(q);
+  const r = await fetch(u); if(!r.ok) throw new Error('http');
+  const j = await r.json(), pages = Object.values((j.query && j.query.pages) || {}).sort((a, b) => a.index - b.index);
+  let best = null, bs = 0;
+  for(const pg of pages){
+    if(!pg.thumbnail) continue;
+    const paren = (pg.title.match(/\(([^)]*)\)\s*$/) || [])[1] || '';
+    if(paren && !/film|movie|anime/i.test(paren)) continue;
+    let sc = 0; for(const nt of m.names) sc = Math.max(sc, scoreTok(toks(pg.title.replace(/\s*\(.*\)\s*$/, ''), false), nt));
+    if(sc < .8) continue;
+    const py = (paren.match(/\b(19|20)\d{2}\b/) || [])[0];
+    if(m.year && py && +py !== m.year) continue;
+    if(/film/i.test(paren)) sc += .2; if(py && +py === m.year) sc += .1;
+    if(sc > bs){ bs = sc; best = pg; }
+  }
+  return best ? best.thumbnail.source : null;
+}
+const covQ = []; let covBusy = 0;
+function getCover(m){ return new Promise(res => { covQ.push({m, res}); pumpCov(); }); }
+function pumpCov(){
+  while(covBusy < 3 && covQ.length){
+    const {m, res} = covQ.shift(); covBusy++;
+    (async () => {
+      let url = null;
+      try{ url = await findCoverUrl(m); if(url){ COVER_URL[m.id] = url; saveCoverUrls(); } else COVER_FAIL.add(m.id); }catch(e){ COVER_FAIL.add(m.id); }
+      covBusy--; res(url); pumpCov();
+    })();
+  }
+}
+function setCoverImg(cov, url){
+  const old = cov.querySelector('img'); if(old) old.remove();
+  const im = el('img', {src:url, alt:'', loading:'lazy', referrerpolicy:'no-referrer'});
+  im.onerror = () => { im.remove(); cov.classList.remove('has'); const id = +cov.dataset.id; if(COVER_URL[id] === url){ delete COVER_URL[id]; saveCoverUrls(); } };
+  cov.prepend(im); cov.classList.add('has');
+}
+async function placeholderBg(m){
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, 0, 1350); g.addColorStop(0, CAT_COLOR[m.cat]); g.addColorStop(1, '#0b0b0d');
+  x.fillStyle = g; x.fillRect(0, 0, 1080, 1350);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .9));
+  return {img:await blobToImg(blob), blob};
+}
+// กด "สร้างโปสเตอร์": ใช้รูปปกเป็นพื้นหลัง + ใส่ชื่อ/คะแนน/แคปชั่น แล้วเข้าหน้าแก้ไขทันที (ไม่จัดตำแหน่งให้ — ปรับเองได้เลย)
+async function makePosterFromMovie(m){
+  toast('กำลังเตรียมโปสเตอร์…');
+  await ensureFonts();
+  let blob = null, img = null, note = '';
+  try{
+    if(CUSTOM[m.id]) blob = CUSTOM[m.id].blob;
+    else{ const url = COVER_URL[m.id] || await getCover(m); if(url){ const r = await fetch(url); if(r.ok) blob = await r.blob(); } }
+    if(blob) img = await blobToImg(blob);
+  }catch(e){ blob = null; img = null; }
+  if(!img){ ({img, blob} = await placeholderBg(m)); note = ' · ดึงรูปปกไม่ได้ ใช้พื้นหลังสีแทน (เปลี่ยนได้ที่ “เปลี่ยนรูปพื้นหลัง”)'; }
+  const p = newPoster(img, blob, m.title); dressMovie(p, m);
+  S.posters.push(p); S.sel = 'bg'; switchView('editor'); setCur(p.id);
+  toast(`ใส่ข้อมูล “${m.title}” แล้ว · จัดตำแหน่งได้เลย${note}`, 5000);
+}
 function renderMovies(){
   const body = $('#mvBody'), chips = $('#mvChips'); body.replaceChildren(); chips.replaceChildren();
+  if(MV.io) MV.io.disconnect();
   const total = MOVIES.length, n = MOVIES.filter(m => doneIds.includes(m.id)).length, pct = Math.round(n/total*100);
   $('#mvSub').textContent = `ทำโปสเตอร์แล้ว ${n} / ${total} เรื่อง (${pct}%)`;
   $('#mvBar').style.width = pct + '%';
@@ -1636,36 +1718,43 @@ function renderMovies(){
   const list = MOVIES.filter(m => (MV.cat === 'all' || m.cat === MV.cat) && !(MV.hide && doneIds.includes(m.id))
     && terms.every(t => (m.title + ' ' + m.caption + ' ' + m.cat + ' ' + (m.year || '')).toLowerCase().includes(t)));
   if(!list.length){ body.append(el('div', {class:'empty', textContent:'ไม่พบหนังที่ค้นหา'})); return; }
+  MV.io = new IntersectionObserver(es => es.forEach(e => {
+    if(!e.isIntersecting) return; MV.io.unobserve(e.target);
+    const m = MOVIES.find(x => x.id === +e.target.dataset.id);
+    if(!m || coverSrc(m) || COVER_FAIL.has(m.id)) return;
+    getCover(m).then(url => { if(url) setCoverImg(e.target, url); });
+  }), {rootMargin:'400px'});
   const grid = el('div', {class:'mgrid'});
   list.forEach(m => {
-    const done = doneIds.includes(m.id);
-    const cb = el('input', {type:'checkbox', checked:done, 'aria-label':'ทำโปสเตอร์แล้ว', on:{change:e => { markDone(m.id, e.target.checked); renderMovies(); }}});
-    grid.append(el('article', {class:'mv-card' + (done ? ' done' : '')},
-      el('div', {class:'mv-top'}, cb, el('span', {class:'ctag', textContent:m.cat, style:`background:${CAT_COLOR[m.cat]}`}), el('span', {class:'sc', textContent:m.score})),
-      el('div', {class:'mt', textContent:m.title + (m.year ? ` (${m.year})` : '')}),
-      el('div', {class:'mc', textContent:`“${m.caption}”`}),
-      el('div', {class:'btns'},
-        el('button', {type:'button', class:'small', textContent:'🎨 สร้างโปสเตอร์', title:'เลือกรูป แล้วระบบใส่ข้อมูลหนังเรื่องนี้ + จัดเลย์เอาต์ให้อัตโนมัติ', on:{click:() => { MV.pick = m; $('#movieFileInput').click(); }}}),
-        el('button', {type:'button', class:'secondary small', textContent:'คัดลอก', on:{click:() => {
-          const t = `${m.title}${m.year ? ' (' + m.year + ')' : ''}\nคะแนน: ${m.score}\nแคปชั่น: "${m.caption}"`;
-          (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('คัดลอกข้อมูลแล้ว'), () => toast('คัดลอกไม่สำเร็จ'));
-        }}}))));
+    const done = doneIds.includes(m.id), src = coverSrc(m);
+    const cov = el('div', {class:'cov', 'data-id':m.id, tabIndex:0, role:'button', title:'คลิกเพื่อเปลี่ยนรูปปกเอง', style:`--c:${CAT_COLOR[m.cat]}`,
+      on:{click:() => { MV.pick = m; $('#movieFileInput').click(); }}},
+      el('span', {class:'ph', textContent:'🎬'}), el('span', {class:'ctag', textContent:m.cat, style:`background:${CAT_COLOR[m.cat]}`}), el('span', {class:'sc', textContent:m.score}));
+    if(src) setCoverImg(cov, src); else MV.io.observe(cov);
+    const cb = el('input', {type:'checkbox', checked:done, on:{change:e => { markDone(m.id, e.target.checked); renderMovies(); }}});
+    grid.append(el('article', {class:'mv-card' + (done ? ' done' : '')}, cov,
+      el('div', {class:'mv-body'},
+        el('div', {class:'mt', textContent:m.title + (m.year ? ` (${m.year})` : '')}),
+        el('div', {class:'mc', title:m.caption, textContent:`“${m.caption}”`}),
+        el('label', {class:'check'}, cb, 'ทำแล้ว'),
+        el('div', {class:'btns'},
+          el('button', {type:'button', class:'small', textContent:'🎨 สร้างโปสเตอร์', on:{click:() => makePosterFromMovie(m)}}),
+          el('button', {type:'button', class:'secondary small', textContent:'คัดลอก', on:{click:() => {
+            const t = `${m.title}${m.year ? ' (' + m.year + ')' : ''}\nคะแนน: ${m.score}\nแคปชั่น: "${m.caption}"`;
+            (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('คัดลอกข้อมูลแล้ว'), () => toast('คัดลอกไม่สำเร็จ'));
+          }}})))));
   });
   body.append(grid);
 }
 $('#mvQ').addEventListener('input', e => { MV.q = e.target.value; renderMovies(); });
 $('#mvHideDone').addEventListener('change', e => { MV.hide = e.target.checked; renderMovies(); });
 $('#movieFileInput').addEventListener('change', async e => {
-  const f = e.target.files[0]; e.target.value = ''; const m = MV.pick; MV.pick = null;
-  if(!f || !m) return;
+  const f = e.target.files[0]; e.target.value = ''; const m = MV.pick; MV.pick = null; if(!f || !m) return;
   try{
-    await ensureFonts();
-    const p = newPoster(await blobToImg(f), f, f.name);
-    dressMovie(p, m); autoLayout(p);
-    S.posters.push(p); S.sel = 'bg';
-    switchView('editor'); setCur(p.id);
-    toast(`สร้างโปสเตอร์ “${m.title}” แล้ว · กด ⚡ บันทึกทั้งหมดตามประเภท เพื่อเข้าโฟลเดอร์ ${m.cat}`, 5000);
-  }catch(err){ toast('เปิดรูปไม่ได้'); }
+    if(DB.db) await DB.put('meta', {k:'cover:' + m.id, blob:f});
+    if(CUSTOM[m.id]) URL.revokeObjectURL(CUSTOM[m.id].url);
+    CUSTOM[m.id] = {blob:f, url:URL.createObjectURL(f)}; renderMovies(); toast('เปลี่ยนรูปปกแล้ว');
+  }catch(err){ toast('บันทึกรูปปกไม่สำเร็จ'); }
 });
 
 document.fonts.addEventListener('loadingdone', () => { invalidate(); drawAllThumbs(); });
