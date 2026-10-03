@@ -169,6 +169,13 @@
   }
   #toast.show{opacity:1; transform:translate(-50%,0);}
 
+  .thumb .tag{position:absolute; top:4px; left:4px; max-width:calc(100% - 36px); background:rgba(0,0,0,.72); color:var(--accent2); font-size:.62rem; font-weight:600; padding:2px 7px; border-radius:999px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:none;}
+  .thumb .tag.warn{background:#6b2226; color:#fff;}
+  details.mv{border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--panel2);}
+  details.mv summary{cursor:pointer; font-weight:600; font-size:.85rem; color:var(--accent2);}
+  details.mv > :not(summary){margin-top:8px;}
+  .toolbar .opts{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; min-width:200px;}
+
   @media (max-width:1000px){
     #viewEditor{grid-template-columns:1fr;}
     .stage{order:1;} .strip{order:2;} .inspector{order:3;}
@@ -255,6 +262,10 @@
         <label for="accentAll">สีหลัก</label>
         <input type="color" id="accentAll" value="#e0212b" title="เปลี่ยนสีแถบชื่อเรื่อง ปุ่ม และแถบล่างพร้อมกัน">
       </div>
+      <div class="opts">
+        <label class="check"><input type="checkbox" id="byCat" checked> แยกโฟลเดอร์ตามประเภทหนัง (ZIP / คลัง)</label>
+        <label class="check"><input type="checkbox" id="catColor"> สีแถบตามประเภทหนัง</label>
+      </div>
     </div>
 
     <div class="canvas-box" id="canvasBox">
@@ -271,6 +282,7 @@
       <button type="button" id="dlOneBtn" class="secondary">ดาวน์โหลดรูปนี้</button>
       <button type="button" id="dlAllBtn" class="secondary">ดาวน์โหลดทั้งหมด (ZIP)</button>
       <button type="button" id="saveBtn">บันทึกลงคลัง</button>
+      <button type="button" id="autoSaveBtn" title="บันทึกทุกใบลงคลังทันที แยกโฟลเดอร์ตามประเภทหนังอัตโนมัติ">⚡ บันทึกทั้งหมดตามประเภท</button>
     </div>
   </section>
 
@@ -289,7 +301,8 @@
     <h3>บันทึกลงคลัง</h3>
     <label class="opt"><input type="radio" name="scope" value="one" checked> เฉพาะรูปที่เลือก (<span id="sdOne"></span>)</label>
     <label class="opt"><input type="radio" name="scope" value="all"> ทั้งหมด <span id="sdAll"></span> ใบ</label>
-    <div>
+    <label class="opt" id="sdByCatWrap" hidden><input type="checkbox" id="sdByCat" checked> แยกเข้าโฟลเดอร์ตามประเภทหนังอัตโนมัติ</label>
+    <div id="sdFolderWrap">
       <label for="sdFolder">โฟลเดอร์</label>
       <select id="sdFolder"></select>
     </div>
@@ -312,6 +325,7 @@
   </form>
 </dialog>
 
+<datalist id="movieList"></datalist>
 <div id="toast" role="status" aria-live="polite"></div>
 <input type="file" id="fileInput" accept="image/*" multiple hidden>
 <input type="file" id="logoInput" accept="image/*" hidden>
@@ -352,7 +366,7 @@ const TYPE = {
 ================================================================ */
 const S = {
   posters: [], cur: null, sel: 'bg', size: '4:5', fmt: 'png',
-  logoImg: null, view: 'home', guide: false
+  logoImg: null, view: 'home', guide: false, byCat: true, catColor: false
 };
 const $ = (s, r=document) => r.querySelector(s);
 const cv = $('#cv');
@@ -374,9 +388,9 @@ function el(tag, props={}, ...kids){
   return n;
 }
 let toastTimer;
-function toast(msg){
+function toast(msg, ms){
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || 2800);
 }
 function saveAs(blob, name){
   const a = document.createElement('a');
@@ -420,6 +434,285 @@ function newPoster(img, blob, fname){
 const cleanEls = els => els.map(({_box, ...r}) => r);
 const titleOf = p => { const t = p.els.find(e => e.type === 'title'); return (t && t.text) || 'poster'; };
 const fileBase = p => sanitize(titleOf(p)) || 'poster';
+
+/* ================================================================
+   ข้อมูลหนัง + จับคู่จากชื่อไฟล์ + จัดเลย์เอาต์อัตโนมัติ + โฟลเดอร์ตามประเภท
+================================================================ */
+const CATS = ['Drama', 'Sci-Fi', 'Thriller', 'Romance', 'Animation'];
+const UNSORTED = 'ยังไม่จัดหมวด';
+const DEFAULT_ACCENT = '#e0212b';
+const CAT_COLOR = {Drama:'#e0212b', 'Sci-Fi':'#1e88e5', Thriller:'#f57c00', Romance:'#e91e8c', Animation:'#2e9e5b'};
+// ชื่อเรียกอื่นของหนังบางเรื่อง (เผื่อตั้งชื่อไฟล์ต่างจากในรายการ)
+const MOVIE_ALIASES = {
+  1:['pursuit of happiness'], 2:['shawshank','shawshank redemption'], 5:['schindler list'],
+  13:['hachi','hachiko'], 27:['dune 2','dune part 2'], 43:['seven'], 66:['eternal sunshine'],
+  78:['amelie poulain'], 86:['walle'], 89:['spiderverse','into the spider verse','spider man spider verse'],
+  90:['grave of the fireflies']
+};
+const MOVIES = [
+  {"id": 1, "cat": "Drama", "title": "The Pursuit of Happyness", "year": 2006, "score": "9.5/10", "caption": "ในวันที่โลกไม่เหลือใคร มือที่กอดเราไว้แน่นที่สุด... คือมือของเราเอง"},
+  {"id": 2, "cat": "Drama", "title": "The Shawshank Redemption", "year": 1994, "score": "10/10", "caption": "ความหวังคือสิ่งสวยงาม และสิ่งสวยงามไม่เคยตาย"},
+  {"id": 3, "cat": "Drama", "title": "A Beautiful Mind", "year": 2001, "score": "9/10", "caption": "เมื่อสมองภายนอกทรยศเรา ยังมีหัวใจข้างในที่คอยโอบอุ้มความรัก"},
+  {"id": 4, "cat": "Drama", "title": "Forrest Gump", "year": 1994, "score": "9.5/10", "caption": "ชีวิตก็เหมือนกล่องช็อกโกแลต คุณไม่มีทางรู้เลยว่าจะได้หยิบเจออะไร"},
+  {"id": 5, "cat": "Drama", "title": "Schindler's List", "year": 1993, "score": "9.8/10", "caption": "ผู้ใดช่วยชีวิตหนึ่งคน ผู้นั้นเสมือนช่วยโลกทั้งใบ"},
+  {"id": 6, "cat": "Drama", "title": "The Green Mile", "year": 1999, "score": "9.5/10", "caption": "ปาฏิหาริย์บางครั้งก็มาในรูปแบบของคนที่โลกผลักไส"},
+  {"id": 7, "cat": "Drama", "title": "Good Will Hunting", "year": 1997, "score": "9/10", "caption": "บางครั้งความเจ็บปวดที่สุด ไม่ใช่การโดนทำร้าย แต่คือการไม่กล้าเปิดใจรัก"},
+  {"id": 8, "cat": "Drama", "title": "12 Years a Slave", "year": 2013, "score": "9/10", "caption": "อิสรภาพไม่ใช่สิ่งที่ใครหยิบยื่นให้ แต่มันคือสิ่งที่เราต้องมีชีวิตเพื่อทวงคืน"},
+  {"id": 9, "cat": "Drama", "title": "Dead Poets Society", "year": 1989, "score": "9.5/10", "caption": "จงทำให้ชีวิตของคุณมีความพิเศษ เพราะคุณเกิดมาเพื่อเป็นตัวของตัวเอง"},
+  {"id": 10, "cat": "Drama", "title": "The Intouchables", "year": 2011, "score": "9/10", "caption": "มิตรภาพแท้จริงไม่สนความแตกต่าง แต่มันมองเห็นเสียงหัวใจที่ตรงกัน"},
+  {"id": 11, "cat": "Drama", "title": "The Truman Show", "year": 1998, "score": "9.2/10", "caption": "ถ้าพวกเขาไม่พบคุณ... ก็ขอให้คุณอรุณสวัสดิ์ บ่ายสวัสดิ์ และราตรีสวัสดิ์"},
+  {"id": 12, "cat": "Drama", "title": "Cinderella Man", "year": 2005, "score": "8.8/10", "caption": "ในยามที่ท้องหิวและสิ้นหวัง ศักดิ์ศรีของคนเป็นพ่อคือพลังที่ยิ่งใหญ่ที่สุด"},
+  {"id": 13, "cat": "Drama", "title": "Hachi: A Dog's Tale", "year": 2009, "score": "9.5/10", "caption": "ความจงรักภักดีบางอย่าง ยาวนานกว่าลมหายใจของผู้ให้"},
+  {"id": 14, "cat": "Drama", "title": "Life Is Beautiful", "year": 1997, "score": "9.7/10", "caption": "รอยยิ้มและเสียงหัวใจที่พ่อสร้าง คือเกราะป้องกันภัยร้ายที่งดงามที่สุด"},
+  {"id": 15, "cat": "Drama", "title": "Manchester by the Sea", "year": 2016, "score": "8.5/10", "caption": "แผลใจบางแผลลึกเกินกว่าจะเยียวยา ทำได้แค่เรียนรู้ที่จะอยู่กับมัน"},
+  {"id": 16, "cat": "Drama", "title": "Room", "year": 2015, "score": "9/10", "caption": "โลกกว้างแค่ไหนไม่สำคัญเท่ากับคนที่เรารักอยู่ข้างกาย"},
+  {"id": 17, "cat": "Drama", "title": "Whiplash", "year": 2014, "score": "9.5/10", "caption": "ความพยายามอย่างถึงที่สุด อาจแลกมาด้วยความสุขที่เกือบสูญสิ้น"},
+  {"id": 18, "cat": "Drama", "title": "Lion", "year": 2016, "score": "8.8/10", "caption": "สายใยแห่งความคิดถึงพาเราเดินทางข้ามทวีป เพื่อกลับสู่อ้อมกอดเดิม"},
+  {"id": 19, "cat": "Drama", "title": "Slumdog Millionaire", "year": 2008, "score": "9/10", "caption": "โชคชะตาขีดเส้นทางชีวิต แต่หัวใจที่สู้ไม่ถอยต่างหากคือผู้กำหนด"},
+  {"id": 20, "cat": "Drama", "title": "Green Book", "year": 2018, "score": "9.2/10", "caption": "ความแตกต่างไม่ใช่กำแพงกั้น หากแต่เป็นสะพานเชื่อมใจให้เราเข้าใจกัน"},
+  {"id": 21, "cat": "Sci-Fi", "title": "Interstellar", "year": 2014, "score": "10/10", "caption": "พลังที่ยิ่งใหญ่กว่าแรงโน้มถ่วง... คือความคิดถึงข้ามขอบฟ้าจักรวาล"},
+  {"id": 22, "cat": "Sci-Fi", "title": "Inception", "year": 2010, "score": "9.5/10", "caption": "จงระวังความคิดของคุณให้ดี เพราะมันอาจกลายเป็นความจริงที่คุณตื่นจากฝันไม่ได้"},
+  {"id": 23, "cat": "Sci-Fi", "title": "The Martian", "year": 2015, "score": "9/10", "caption": "เมื่ออยู่กลางดาวอังคารที่ไร้ผู้คน วิทยาศาสตร์และความหวังคือลมหายใจเดียว"},
+  {"id": 24, "cat": "Sci-Fi", "title": "Blade Runner 2049", "year": 2017, "score": "9/10", "caption": "การมีความรู้สึกและจิตวิญญาณ อาจเป็นคำสาปที่เจ็บปวดที่สุดของหุ่นยนต์"},
+  {"id": 25, "cat": "Sci-Fi", "title": "Arrival", "year": 2016, "score": "9.2/10", "caption": "ถ้าคุณรู้จุดจบของความเจ็บปวดตั้งแต่ต้น คุณยังจะเลือกเดินทางสายเดิมไหม"},
+  {"id": 26, "cat": "Sci-Fi", "title": "The Matrix", "year": 1999, "score": "9.8/10", "caption": "เลือกเม็ดยาสีแดงเพื่อตื่นสู่โลกความจริง หรือสีฟ้าเพื่อหลับใหลต่อไป"},
+  {"id": 27, "cat": "Sci-Fi", "title": "Dune: Part Two", "year": 2024, "score": "9.6/10", "caption": "เมื่อโชคชะตากำหนดให้เป็นผู้นำ สงครามและศรัทธาจึงต้องแลกมาด้วยเลือด"},
+  {"id": 28, "cat": "Sci-Fi", "title": "Ex Machina", "year": 2014, "score": "8.9/10", "caption": "เมื่อปัญญาประดิษฐ์เรียนรู้ที่จะหลอกลวง มนุษย์ผู้สร้างก็กลายเป็นแค่เหยื่อ"},
+  {"id": 29, "cat": "Sci-Fi", "title": "Gravity", "year": 2013, "score": "8.8/10", "caption": "ท่ามกลางความมืดมิดและไร้น้ำหนักในอวกาศ การอยากมีชีวิตรอดคือแรงผลักดันเดียว"},
+  {"id": 30, "cat": "Sci-Fi", "title": "Contact", "year": 1997, "score": "9/10", "caption": "จักรวาลกว้างใหญ่เกินกว่าจะจินตนาการ และเราไม่ได้อยู่อย่างโดดเดี่ยว"},
+  {"id": 31, "cat": "Sci-Fi", "title": "Edge of Tomorrow", "year": 2014, "score": "9.1/10", "caption": "ตายแล้วเกิดใหม่ซ้ำแล้วซ้ำเล่า จนกว่าจะพบวิธีชนะสงครามโลก"},
+  {"id": 32, "cat": "Sci-Fi", "title": "Her", "year": 2013, "score": "9.3/10", "caption": "เราอาจตกหลุมรักเสียงและโปรแกรมได้ แต่หัวใจดิจิทัลก็ไม่มีวันโอบกอดเราจริง ๆ"},
+  {"id": 33, "cat": "Sci-Fi", "title": "Interstellar", "year": null, "score": "9.4/10", "caption": "ความรักเป็นสิ่งเดียวที่เราสัมผัสได้ ข้ามผ่านมิติเวลาและอวกาศ", "alt": true},
+  {"id": 34, "cat": "Sci-Fi", "title": "Avatar", "year": 2009, "score": "8.7/10", "caption": "เมื่อถอดร่างมนุษย์ออก เราถึงได้เรียนรู้การเป็นส่วนหนึ่งของธรรมชาติอย่างแท้จริง"},
+  {"id": 35, "cat": "Sci-Fi", "title": "The Prestige", "year": 2006, "score": "9.5/10", "caption": "กลมายากลที่สมบูรณ์แบบที่สุด คือการยอมแลกทุกอย่างแม้กระทั่งวิญญาณ"},
+  {"id": 36, "cat": "Sci-Fi", "title": "Looper", "year": 2012, "score": "8.5/10", "caption": "คุณจะฆ่าตัวในอนาคตเพื่อความอยู่รอดในปัจจุบันได้จริงหรือ"},
+  {"id": 37, "cat": "Sci-Fi", "title": "District 9", "year": 2009, "score": "9/10", "caption": "เมื่อมนุษย์ต่างดาวกลายเป็นผู้ถูกกดขี่ เราถึงได้เห็นความโหดร้ายของเผ่าพันธุ์ตัวเอง"},
+  {"id": 38, "cat": "Sci-Fi", "title": "Ready Player One", "year": 2018, "score": "8.8/10", "caption": "โลกในเกมอาจสวยงามแค่ไหน แต่ความจริงก็ยังคงเป็นสิ่งเดียวที่จับต้องได้"},
+  {"id": 39, "cat": "Sci-Fi", "title": "Prometheus", "year": 2012, "score": "8.2/10", "caption": "การตามหาผู้สร้าง อาจพาเราไปพบกับจุดจบอันน่าสะพรึงกลัว"},
+  {"id": 40, "cat": "Sci-Fi", "title": "Children of Men", "year": 2006, "score": "9.4/10", "caption": "ในโลกที่ไร้เด็กเกิดใหม่ ความหวังเดียวคือปาฏิหาริย์ที่กำลังจะลืมตาดูโลก"},
+  {"id": 41, "cat": "Thriller", "title": "Gone Girl", "year": 2014, "score": "9/10", "caption": "อย่าคิดว่าคุณรู้จักคนที่นอนข้าง ๆ ดีพอ จนกว่าจะได้เห็นวันที่เขาหมดรัก"},
+  {"id": 42, "cat": "Thriller", "title": "Shutter Island", "year": 2010, "score": "9.5/10", "caption": "การใช้ชีวิตอยู่กับความจริงที่เจ็บปวด... อาจน่ากลัวยิ่งกว่าการอยู่ในภาพลวงตา"},
+  {"id": 43, "cat": "Thriller", "title": "Se7en", "year": 1995, "score": "9.5/10", "caption": "ความมืดในจิตใจมนุษย์ น่ากลัวกว่าฆาตกรที่ซ่อนตัวอยู่ในเงามืดเสียอีก"},
+  {"id": 44, "cat": "Thriller", "title": "The Silence of the Lambs", "year": 1991, "score": "9.8/10", "caption": "บางครั้งการจับฆาตกรต่อเนื่อง คุณต้องยอมให้ปีศาจอีกตัวนำทาง"},
+  {"id": 45, "cat": "Thriller", "title": "Zodiac", "year": 2007, "score": "8.9/10", "caption": "ความหมกมุ่นในการตามหาความจริง อาจกัดกินชีวิตคุณไปทีละนิด"},
+  {"id": 46, "cat": "Thriller", "title": "Parasite", "year": 2019, "score": "9.8/10", "caption": "เส้นแบ่งระหว่างคนรวยกับคนจน บางทีก็บางเฉียบจนแทบมองไม่เห็น"},
+  {"id": 47, "cat": "Thriller", "title": "Prisoners", "year": 2013, "score": "9.2/10", "caption": "เมื่อลูกหายตัวไป ศีลธรรมและขอบเขตของความถูกต้องก็พังทลายลง"},
+  {"id": 48, "cat": "Thriller", "title": "Knives Out", "year": 2019, "score": "8.8/10", "caption": "ความลับในครอบครัวมักซ่อนอยู่ใต้หน้ากากแห่งความสุภาพเรียบร้อย"},
+  {"id": 49, "cat": "Thriller", "title": "The Departed", "year": 2006, "score": "9.3/10", "caption": "เมื่อสายลับอยู่ในกลุ่มโจร และโจรปลอมตัวเป็นตำรวจ ใครคือตัวจริงกันแน่"},
+  {"id": 50, "cat": "Thriller", "title": "Memento", "year": 2000, "score": "9.4/10", "caption": "ความทรงจำที่หายไปทุก 10 นาที ทำให้รอยสักบนตัวคือความจริงเดียวที่เหลืออยู่"},
+  {"id": 51, "cat": "Thriller", "title": "Nightcrawler", "year": 2014, "score": "9/10", "caption": "ข่าวที่ขายดีที่สุด คือข่าวที่แลกมาด้วยความฉิบหายของคนอื่น"},
+  {"id": 52, "cat": "Thriller", "title": "The Usual Suspects", "year": 1995, "score": "9.5/10", "caption": "กลลวงที่ยิ่งใหญ่ที่สุดของปีศาจ คือการทำให้โลกเชื่อว่ามันไม่มีอยู่จริง"},
+  {"id": 53, "cat": "Thriller", "title": "Split", "year": 2016, "score": "8.8/10", "caption": "ในร่างเดียวกันมีบุคลิกซ่อนอยู่มากมาย และตัวตนที่น่ากลัวที่สุดกำลังจะตื่นขึ้น"},
+  {"id": 54, "cat": "Thriller", "title": "Get Out", "year": 2017, "score": "9.1/10", "caption": "รอยยิ้มต้อนรับที่อบอุ่น อาจซ่อนความสยดสยองที่คุณคาดไม่ถึง"},
+  {"id": 55, "cat": "Thriller", "title": "Knock at the Cabin", "year": 2023, "score": "7.8/10", "caption": "ถ้าคุณต้องเลือกเสียสละคนรักหนึ่งคน เพื่อช่วยโลกทั้งใบ คุณจะทำอย่างไร"},
+  {"id": 56, "cat": "Thriller", "title": "The Invisible Man", "year": 2020, "score": "8.5/10", "caption": "สิ่งที่น่ากลัวที่สุดไม่ใช่ผี แต่มันคือคนที่มองไม่เห็นแต่คอยตามหลอกหลอน"},
+  {"id": 57, "cat": "Thriller", "title": "Searching", "year": 2018, "score": "9/10", "caption": "หน้าจอโซเชียลมีเดียรู้เรื่องราวของเรา มากกว่าครอบครัวเสียอีก"},
+  {"id": 58, "cat": "Thriller", "title": "Uncut Gems", "year": 2019, "score": "8.7/10", "caption": "ความโลภและการพนันพาชีวิตดิ่งลงเหวแบบหยุดไม่อยู่"},
+  {"id": 59, "cat": "Thriller", "title": "The Girl with the Dragon Tattoo", "year": 2011, "score": "8.9/10", "caption": "ใต้พรมตระกูลผู้ดีเก่า ซ่อนความเน่าเฟะที่เต็มไปด้วยรอยแผลเป็น"},
+  {"id": 60, "cat": "Thriller", "title": "The Menu", "year": 2022, "score": "8.6/10", "caption": "มื้ออาหารสุดหรูที่แลกมาด้วยความตายของแขกรับเชิญผู้หยิ่งยโส"},
+  {"id": 61, "cat": "Romance", "title": "About Time", "year": 2013, "score": "9.5/10", "caption": "วิธีใช้ชีวิตให้มีความสุขที่สุด... คือการทำทุกวันให้เหมือนเราได้ย้อนเวลากลับมาแก้ไขมัน"},
+  {"id": 62, "cat": "Romance", "title": "La La Land", "year": 2016, "score": "9/10", "caption": "บางครั้งความรักที่ดีที่สุด คือการปล่อยมือให้อีกคนไปถึงความฝัน"},
+  {"id": 63, "cat": "Romance", "title": "Before Sunrise", "year": 1995, "score": "9/10", "caption": "ช่วงเวลาสั้น ๆ กับคนแปลกหน้า อาจเปลี่ยนความหมายของคำว่าตลอดไป"},
+  {"id": 64, "cat": "Romance", "title": "Titanic", "year": 1997, "score": "9.6/10", "caption": "หัวใจที่รักเธออย่างแท้จริง จะไม่มีวันจมดิ่งลงสู่ก้นมหาสมุทร"},
+  {"id": 65, "cat": "Romance", "title": "The Notebook", "year": 2004, "score": "9.2/10", "caption": "ความรักที่ยิ่งใหญ่ ไม่หวั่นแม้กาลเวลาและคราบความทรงจำจะเลือนหาย"},
+  {"id": 66, "cat": "Romance", "title": "Eternal Sunshine of the Spotless Mind", "year": 2004, "score": "9.7/10", "caption": "ลบความทรงจำออกจากสมองได้ แต่ลบความรู้สึกออกจากหัวใจไม่ได้เลย"},
+  {"id": 67, "cat": "Romance", "title": "500 Days of Summer", "year": 2009, "score": "8.9/10", "caption": "โชคชะตาไม่มีจริง มีเพียงความจริงที่ว่าเธอไม่ได้รักเรา"},
+  {"id": 68, "cat": "Romance", "title": "Call Me by Your Name", "year": 2017, "score": "9.1/10", "caption": "ความเจ็บปวดจากความรัก คือหลักฐานว่าครั้งหนึ่งเราเคยรู้สึกอย่างลึกซึ้ง"},
+  {"id": 69, "cat": "Romance", "title": "Me Before You", "year": 2016, "score": "8.8/10", "caption": "รักคือการปล่อยให้อีกคนบินไปในทางที่เขาเลือก แม้เราจะเจ็บปวดก็ตาม"},
+  {"id": 70, "cat": "Romance", "title": "A Star Is Born", "year": 2018, "score": "9/10", "caption": "เสียงเพลงอาจส่องประกาย แต่แสงไฟนั้นส่องได้แค่คนละดวง"},
+  {"id": 71, "cat": "Romance", "title": "Past Lives", "year": 2023, "score": "9.4/10", "caption": "แรงดึงดูดจากชาติภพก่อน อาจเป็นได้แค่ความทรงจำในชาติภพนี้"},
+  {"id": 72, "cat": "Romance", "title": "The Fault in Our Stars", "year": 2014, "score": "8.8/10", "caption": "ความสุขที่จำกัดเวลา มีค่ามากกว่าความไร้ค่าที่อยู่ยาวนาน"},
+  {"id": 73, "cat": "Romance", "title": "Before Sunset", "year": 2004, "score": "9.3/10", "caption": "9 ปีที่พลพราก พิสูจน์ว่าหัวใจไม่เคยเปลี่ยนเป็นอื่น"},
+  {"id": 74, "cat": "Romance", "title": "Before Midnight", "year": 2013, "score": "9/10", "caption": "เมื่อความรักผ่านพ้นช่วงเวลาโรแมนติก สิ่งที่เหลือคือความจริงของชีวิตคู่"},
+  {"id": 75, "cat": "Romance", "title": "Silver Linings Playbook", "year": 2012, "score": "8.9/10", "caption": "คนบ้าสองคนรักกัน อาจเป็นยารักษาแผลใจที่ดีที่สุดในโลก"},
+  {"id": 76, "cat": "Romance", "title": "Pride & Prejudice", "year": 2005, "score": "9.4/10", "caption": "ความเย่อหยิ่งและอคติพังทลายลง เมื่อหัวใจเปิดรับความจริง"},
+  {"id": 77, "cat": "Romance", "title": "To All the Boys I've Loved Before", "year": 2018, "score": "8.2/10", "caption": "จดหมายรักที่เก็บซ่อนไว้ ถูกเปิดเผยและกลายเป็นเรื่องจริงที่คาดไม่ถึง"},
+  {"id": 78, "cat": "Romance", "title": "Amélie", "year": 2001, "score": "9.1/10", "caption": "ความสุขเล็ก ๆ ของการสร้างรอยยิ้มให้คนอื่น นำพาความรักมาสู่หัวใจตัวเอง"},
+  {"id": 79, "cat": "Romance", "title": "Notting Hill", "year": 1999, "score": "9/10", "caption": "ฉันก็แค่เด็กผู้หญิงคนหนึ่ง ที่ยืนอยู่ตรงหน้าผู้ชายคนหนึ่งและขอให้เขารักเธอ"},
+  {"id": 80, "cat": "Romance", "title": "The Vow", "year": 2012, "score": "8.4/10", "caption": "แม้ความทรงจำจะหายไป แต่หัวใจจำวิธีรักเธอได้เสมอ"},
+  {"id": 81, "cat": "Animation", "title": "Inside Out", "year": 2015, "score": "9.5/10", "caption": "น้ำตาไม่ได้แปลว่าอ่อนแอ แต่มันคือวิธีที่หัวใจเยียวยาตัวเอง"},
+  {"id": 82, "cat": "Animation", "title": "Coco", "year": 2017, "score": "10/10", "caption": "ความตายที่แท้จริงไม่ใช่การจากไป แต่คือการถูกลืมเลือนจากคนที่เรารัก"},
+  {"id": 83, "cat": "Animation", "title": "Soul", "year": 2020, "score": "9/10", "caption": "ชีวิตที่มีความหมาย ไม่จำเป็นต้องยิ่งใหญ่ แค่ได้ใช้ใจสัมผัสความสุขเล็ก ๆ ก็พอ"},
+  {"id": 84, "cat": "Animation", "title": "Spirited Away", "year": 2001, "score": "9.8/10", "caption": "อย่าลืมตัวตนและชื่อของคุณ แม้ต้องเผชิญโลกที่น่ากลัวแค่ไหนก็ตาม"},
+  {"id": 85, "cat": "Animation", "title": "Up", "year": 2009, "score": "9.5/10", "caption": "การผจญภัยครั้งใหม่เริ่มต้นขึ้นได้เสมอ แม้ในวันที่เราสูญเสียคนรักไป"},
+  {"id": 86, "cat": "Animation", "title": "WALL-E", "year": 2008, "score": "9.6/10", "caption": "หุ่นยนต์ตัวเล็ก ๆ ที่หลงเหลือความรักในโลกที่ไร้ผู้คน"},
+  {"id": 87, "cat": "Animation", "title": "Your Name", "year": 2016, "score": "9.5/10", "caption": "แม้จะจำชื่อไม่ได้ แต่หัวใจจำความรู้สึกโหยหาเธอได้แม่นยำ"},
+  {"id": 88, "cat": "Animation", "title": "Toy Story 3", "year": 2010, "score": "9.6/10", "caption": "เติบโตขึ้นเพื่อก้าวผ่านวันวาน และส่งต่อความทรงจำให้คนรุ่นต่อไป"},
+  {"id": 89, "cat": "Animation", "title": "Spider-Man: Into the Spider-Verse", "year": 2018, "score": "9.7/10", "caption": "ใคร ๆ ก็เป็นฮีโร่ได้ ขอแค่ก้าวออกไปยืนหยัดในแบบของตัวเอง"},
+  {"id": 90, "cat": "Animation", "title": "Graveyard of the Fireflies", "year": 1988, "score": "9.2/10", "caption": "สงครามพรากทุกลมหายใจ และทิ้งไว้เพียงความเจ็บปวดอันโดดเดี่ยว"},
+  {"id": 91, "cat": "Animation", "title": "Zootopia", "year": 2016, "score": "9/10", "caption": "โลกนี้อาจมองเราจากรูปลักษณ์ แต่ตัวตนจริง ๆ อยู่ที่การกระทำของเรา"},
+  {"id": 92, "cat": "Animation", "title": "Finding Nemo", "year": 2003, "score": "9.3/10", "caption": "เมื่อลูกหลงทาง คนเป็นพ่อแม่ออกเดินทางสุดขอบโลกเพื่อตามหากลับมา"},
+  {"id": 93, "cat": "Animation", "title": "A Silent Voice", "year": 2016, "score": "9.4/10", "caption": "กล้าที่จะสบตาคนอื่น เพื่อให้อภัยความผิดพลาดในอดีตของตัวเอง"},
+  {"id": 94, "cat": "Animation", "title": "The Boy and the Heron", "year": 2023, "score": "8.8/10", "caption": "ก้าวผ่านความโศกเศร้าภายในใจ เพื่อยอมรับความจริงของวัฏจักรชีวิต"},
+  {"id": 95, "cat": "Animation", "title": "Ratatouille", "year": 2007, "score": "9.2/10", "caption": "ใคร ๆ ก็เป็นเชฟได้ แต่พรสวรรค์แท้จริงสามารถมาจากที่ไหนก็ได้"},
+  {"id": 96, "cat": "Animation", "title": "Howl's Moving Castle", "year": 2004, "score": "9.3/10", "caption": "หัวใจที่รักใครสักคนอย่างหมดใจ ไม่จำเป็นต้องสวยงามตามพิมพ์นิยม"},
+  {"id": 97, "cat": "Animation", "title": "Wreck-It Ralph", "year": 2012, "score": "8.9/10", "caption": "การเป็นตัวร้ายในเกม ไม่ได้แปลว่าเราต้องเป็นคนร้ายในชีวิตจริง"},
+  {"id": 98, "cat": "Animation", "title": "The Lion King", "year": 1994, "score": "9.5/10", "caption": "อดีตอาจเจ็บปวด แต่เราเรียนรู้จากมันและก้าวต่อไปได้เสมอ"},
+  {"id": 99, "cat": "Animation", "title": "Encanto", "year": 2021, "score": "8.7/10", "caption": "คุณค่าของคนเราไม่ได้อยู่ที่เวทมนตร์หรือความสมบูรณ์แบบ"},
+  {"id": 100, "cat": "Animation", "title": "Ponyo", "year": 2008, "score": "8.9/10", "caption": "ความรักที่บริสุทธิ์และไร้เดียงสา ทะยานข้ามคลื่นลมเพื่อพบเธอ"}
+];
+
+const STOP = new Set(['the','a','an','of','and','to','in','on','at','is']);
+const NOISE = new Set(['poster','bg','background','copy','final','img','image','photo','still','scene','hd','jpg','jpeg','png','webp','alternative']);
+function normStr(s, stripYears){
+  let t = String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/&/g, ' and ').replace(/['’`]/g, '');
+  if(stripYears) t = t.replace(/\b(19|20)\d{2}\b/g, ' ');
+  return t.replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function toks(s, stripYears){
+  const t = normStr(s, stripYears).split(' ').filter(Boolean);
+  const k = t.filter(x => !STOP.has(x));
+  return k.length ? k : t;
+}
+MOVIES.forEach(m => {
+  m.label = `${m.title}${m.year ? ' (' + m.year + ')' : ''} — ${m.cat}`;
+  m.names = [m.title, ...(MOVIE_ALIASES[m.id] || [])].map(n => toks(n, false));
+});
+function scoreTok(a, b){
+  if(!a.length || !b.length) return 0;
+  const A = new Set(a), B = new Set(b);
+  const inter = [...A].filter(x => B.has(x)).length;
+  if(!inter) return 0;
+  if(a.join(' ') === b.join(' ')) return 1;
+  let s = 2*inter / (A.size + B.size);
+  if(inter === B.size && B.size >= 2) s = Math.max(s, .92 - .02*(A.size - B.size)); // คำในชื่อหนังอยู่ครบในชื่อไฟล์
+  if(inter === A.size && A.size >= 2) s = Math.max(s, .85);                         // ชื่อไฟล์เป็นส่วนหนึ่งของชื่อหนัง (≥2 คำ)
+  return s;
+}
+function matchMovie(filename){
+  const base = String(filename || '').replace(/\.[^.]+$/, '').replace(/\(\d+\)\s*$/, '');
+  const ft = toks(base, true).filter(t => !NOISE.has(t));
+  if(!ft.length) return null;
+  const wantAlt = /alternative/.test(normStr(base));
+  let best = null, bs = 0;
+  for(const m of MOVIES){
+    let s = 0; for(const nt of m.names) s = Math.max(s, scoreTok(ft, nt));
+    if(m.alt && !wantAlt) s -= .001;   // ถ้าชนกัน ให้เลือกตัวหลัก ไม่ใช่ตัว Alternative
+    if(s > bs){ bs = s; best = m; }
+  }
+  return bs >= .8 ? best : null;
+}
+function findMovieByText(v){
+  const q = String(v || '').trim().toLowerCase(); if(!q) return null;
+  return MOVIES.find(m => m.label.toLowerCase() === q) || MOVIES.find(m => m.title.toLowerCase() === q) || matchMovie(q);
+}
+
+function setAccent(p, v){
+  p.els.forEach(x => { if(x.type === 'title' || x.type === 'cta') x.color2 = v; if(x.type === 'bar') x.color = v; });
+}
+function catAccent(p){ return (S.catColor && p.cat) ? CAT_COLOR[p.cat] : null; }
+
+// ใส่ข้อมูลหนังลงในโปสเตอร์ (ชื่อเรื่อง / คะแนน / แคปชั่น / ประเภท)
+function dressMovie(p, m){
+  p.movie = m; p.cat = m.cat;
+  const set = (type, text) => { const e = p.els.find(x => x.type === type); if(e){ e.text = text; delete e.wrap; } };
+  set('title', m.title); set('score', m.score); set('caption', m.caption);
+  const a = catAccent(p); if(a) setAccent(p, a);
+}
+
+const MC = document.createElement('canvas').getContext('2d');
+// จัดตำแหน่ง/ขนาดข้อความให้ไม่ชนกัน: ชื่อเรื่องหดไม่ให้ทับโลโก้, แคปชั่นย่อให้พอดี ≤2 บรรทัด (ถ้าได้) และตัดบรรทัดให้สมดุล, คะแนนวางเหนือแคปชั่น
+function autoLayout(p, opt){
+  const g = t => p.els.find(e => e.type === t);
+  const title = g('title'), logo = g('logo'), score = g('score'), cap = g('caption'), cta = g('cta'), bar = g('bar');
+  const RW = REF_W, RH = REF_H;
+
+  if(title && title.vis){
+    const txt = (title.text || '').replace(/\n/g, ' ').toUpperCase();
+    let right = RW * .963;
+    if(logo && logo.vis && S.logoImg){
+      const lw = S.logoImg.naturalWidth / S.logoImg.naturalHeight * logo.size;
+      right = anchorLeft(logo, RW, lw) - 24;
+    }
+    let s = (opt && opt.titleMax) || 30;
+    for(; s >= 16; s--){
+      MC.font = fontOf('title', s);
+      const w = s*.233 + s*.57 + MC.measureText(txt).width;
+      if(anchorLeft(title, RW, w) + w <= right) break;
+    }
+    title.size = Math.max(16, s);
+  }
+
+  const barH = (bar && bar.vis) ? bar.size : 0;
+  const ctaTop = (cta && cta.vis) ? cta.y*RH - cta.size*1.82/2 : RH - barH - 36;
+  let cursor = ctaTop - 26;
+
+  if(cap && cap.vis && (cap.text || '').trim()){
+    const txt = cap.text;
+    let size = 38;
+    for(const s of [58, 54, 50, 46, 42, 38]){
+      MC.font = fontOf('caption', s);
+      if(wrapLines(MC, txt, RW*.9).length <= 2){ size = s; break; }
+    }
+    MC.font = fontOf('caption', size);
+    const n = wrapLines(MC, txt, RW*.9).length;
+    let lo = RW*.3, hi = RW*.9;
+    for(let i = 0; i < 14; i++){ const mid = (lo+hi)/2; if(wrapLines(MC, txt, mid).length <= n) hi = mid; else lo = mid; }
+    cap.wrap = n > 1 ? Math.min(.9, (hi + 6) / RW) : .9;
+    cap.size = size;
+    const total = wrapLines(MC, txt, cap.wrap*RW).length * size * 1.3;
+    cap.y = (cursor - total/2) / RH;
+    cursor = cursor - total - 6;
+  }
+  if(score && score.vis) score.y = (cursor - score.size*.35) / RH;
+}
+
+async function applyMovie(p, m, quiet){
+  await ensureFonts();
+  dressMovie(p, m); autoLayout(p);
+  invalidate(); drawAllThumbs();
+  if(cur() === p) renderInspector();
+  if(!quiet) toast(`ใส่ข้อมูล “${m.title}” แล้ว · โฟลเดอร์ ${m.cat}`);
+}
+
+// โฟลเดอร์ในคลัง: หาจากชื่อ ถ้าไม่มีให้สร้าง
+async function folderIdByName(name, cache){
+  if(cache && cache[name]) return cache[name];
+  const f = (await DB.all('folders')).find(x => x.name === name);
+  let id;
+  if(f) id = f.id;
+  else { id = uid(); await DB.put('folders', {id, name, createdAt:Date.now()}); }
+  if(cache) cache[name] = id;
+  return id;
+}
+const useCatFolders = list => S.byCat && list.some(p => p.cat);
+const catFolderName = p => p.cat || UNSORTED;
+
+// กล่อง "ข้อมูลหนัง" ในแผงปรับแต่ง — ใช้เลือกหนังเองเมื่อจับคู่อัตโนมัติไม่เจอ / เปลี่ยนประเภท / จัดเลย์เอาต์ใหม่
+function movieBlock(p){
+  const d = el('details', {class:'mv', open:!p.movie});
+  d.append(el('summary', {textContent: p.movie ? `ข้อมูลหนัง · ${p.movie.title}` : 'ข้อมูลหนัง · ยังไม่พบ (เลือกเอง)'}));
+  d.append(el('div', {class:'hint', textContent: p.movie
+    ? `${p.movie.cat} · ${p.movie.score} (ดึงจากชื่อไฟล์อัตโนมัติ)`
+    : 'ไม่พบชื่อหนังนี้ในรายการจากชื่อไฟล์ — พิมพ์ค้นหาเพื่อเลือกเอง'}));
+  const inp = el('input', {type:'text', placeholder:'พิมพ์ชื่อหนังเพื่อค้นหา…', autocomplete:'off'});
+  inp.setAttribute('list', 'movieList');
+  inp.addEventListener('change', () => { const m = findMovieByText(inp.value); if(m) applyMovie(p, m); });
+  d.append(el('div', {class:'row'}, el('div', {class:'grow'}, inp),
+    el('button', {type:'button', class:'small', textContent:'ใช้ข้อมูลนี้', on:{click:() => {
+      const m = findMovieByText(inp.value); if(m) applyMovie(p, m); else toast('ไม่พบหนังเรื่องนี้ในรายการ');
+    }}})));
+  const sel = el('select', {}, new Option('— ไม่ระบุประเภท —', ''), CATS.map(c => new Option(c, c)));
+  sel.value = p.cat || '';
+  sel.addEventListener('change', () => {
+    p.cat = sel.value || null;
+    const a = catAccent(p); if(a) setAccent(p, a);
+    invalidate(); drawThumb(p);
+  });
+  d.append(el('div', {class:'field'}, el('label', {textContent:'ประเภท (ใช้แยกโฟลเดอร์)'}), sel));
+  const relayout = all => async () => {
+    await ensureFonts();
+    (all ? S.posters : [p]).forEach(x => autoLayout(x));
+    invalidate(); drawAllThumbs(); renderInspector();
+    toast(all ? 'จัดเลย์เอาต์ทุกใบแล้ว' : 'จัดเลย์เอาต์ใบนี้แล้ว');
+  };
+  d.append(el('div', {class:'row'},
+    el('button', {type:'button', class:'secondary small', textContent:'จัดเลย์เอาต์ใบนี้', title:'ย่อ/ย้ายชื่อเรื่อง คะแนน แคปชั่น ไม่ให้ชนกัน', on:{click:relayout(false)}}),
+    el('button', {type:'button', class:'secondary small', textContent:'จัดทุกใบ', on:{click:relayout(true)}})));
+  return d;
+}
+
 
 /* ================================================================
    วาดภาพ
@@ -513,7 +806,7 @@ function drawEl(c, e, W, H, k){
     }
     case 'caption': case 'text': {
       c.font = fontOf(e.type, px);
-      const lines = wrapLines(c, e.text || '', W*.9);
+      const lines = wrapLines(c, e.text || '', W*(e.wrap || .9));
       const lh = px*1.3, total = lh*lines.length;
       const maxw = Math.max(1, ...lines.map(l => c.measureText(l).width));
       const x = anchorLeft(e, W, maxw);
@@ -599,6 +892,7 @@ function drawThumb(p){
   if(p._tc.width !== tw || p._tc.height !== th){ p._tc.width = tw; p._tc.height = th; }
   renderPoster(p, p._tc.getContext('2d'), tw, th, null);
   if(p._cap) p._cap.textContent = titleOf(p);
+  if(p._tag){ p._tag.textContent = p.cat || 'ไม่พบข้อมูลหนัง'; p._tag.classList.toggle('warn', !p.cat); }
 }
 function drawAllThumbs(){ S.posters.forEach(drawThumb); }
 
@@ -610,9 +904,10 @@ function renderStrip(){
   S.posters.forEach(p => {
     const canvas = el('canvas'); p._tc = canvas;
     const cap = el('div', {class:'cap'}); p._cap = cap;
+    const tag = el('div', {class:'tag'}); p._tag = tag;
     const x = el('button', {class:'x', type:'button', textContent:'✕', title:'เอารูปนี้ออก', on:{click:ev => { ev.stopPropagation(); removePoster(p.id); }}});
     const li = el('li', {}, el('div', {class:'thumb' + (p.id === S.cur ? ' on' : ''), tabIndex:0, role:'button',
-      on:{click:() => setCur(p.id), keydown:ev => { if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); setCur(p.id); } }}}, canvas, x, cap));
+      on:{click:() => setCur(p.id), keydown:ev => { if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); setCur(p.id); } }}}, canvas, x, tag, cap));
     ul.append(li);
   });
   $('#stripCount').textContent = S.posters.length ? `(${S.posters.length})` : '';
@@ -634,7 +929,7 @@ function setCur(id){
 function syncStage(){
   const has = S.posters.length > 0;
   cv.hidden = !has; $('#drop').hidden = has; $('#canvasHint').hidden = !has;
-  ['dlOneBtn','dlAllBtn','saveBtn','applyAllBtn'].forEach(id => $('#'+id).disabled = !has);
+  ['dlOneBtn','dlAllBtn','saveBtn','autoSaveBtn','applyAllBtn'].forEach(id => $('#'+id).disabled = !has);
   $('#applyAllBtn').disabled = S.posters.length < 2;
 }
 function select(id){ S.sel = id; renderInspector(); invalidate(); }
@@ -646,16 +941,24 @@ async function addFiles(files){
   const list = [...files].filter(f => f.type.startsWith('image/'));
   if(!list.length){ toast('ไม่พบไฟล์รูปภาพ'); return; }
   await ensureFonts();
-  let first = null, failed = 0;
+  let first = null, failed = 0, matched = 0; const miss = [];
   for(const f of list){
     try{
       const img = await blobToImg(f);
       const p = newPoster(img, f, f.name);
+      const m = matchMovie(f.name);
+      if(m){ dressMovie(p, m); matched++; } else miss.push(f.name.replace(/\.[^.]+$/, ''));
+      autoLayout(p);
       S.posters.push(p); if(!first) first = p;
     }catch(e){ failed++; }
   }
-  if(first){ S.sel = 'bg'; setCur(first.id); toast(`เพิ่ม ${list.length - failed} รูปแล้ว`); }
-  if(failed) toast(`เปิดรูปไม่ได้ ${failed} ไฟล์`);
+  if(first){
+    S.sel = 'bg'; setCur(first.id);
+    let msg = `เพิ่ม ${list.length - failed} รูป · จับคู่ข้อมูลหนังได้ ${matched} รูป`;
+    if(miss.length) msg += ` · ไม่พบข้อมูล: ${miss.slice(0, 3).join(', ')}${miss.length > 3 ? ` และอีก ${miss.length - 3}` : ''}`;
+    if(failed) msg += ` · เปิดรูปไม่ได้ ${failed} ไฟล์`;
+    toast(msg, 6000);
+  }else if(failed) toast(`เปิดรูปไม่ได้ ${failed} ไฟล์`);
 }
 $('#addBtn').addEventListener('click', () => $('#fileInput').click());
 $('#drop').addEventListener('click', () => $('#fileInput').click());
@@ -704,6 +1007,8 @@ $('#applyAllBtn').addEventListener('click', () => {
     const keep = {}; p.els.forEach(x => { if(movieText.includes(x.type)) keep[x.type] = x.text; });
     p.els = cleanEls(src.els).map(x => (movieText.includes(x.type) && keep[x.type] !== undefined) ? {...x, text:keep[x.type]} : {...x});
     p.bg.fit = src.bg.fit; p.bg.shade = src.bg.shade;
+    const c2 = p.els.find(x => x.type === 'caption'); if(c2) delete c2.wrap;
+    autoLayout(p, {titleMax: Math.max(30, (src.els.find(x => x.type === 'title') || {size:30}).size)});
   });
   drawAllThumbs(); toast('ใช้สไตล์นี้กับทุกใบแล้ว');
 });
@@ -728,7 +1033,7 @@ function renderInspector(){
   if(!p){ box.append(el('h2', {textContent:'ปรับแต่ง'}), el('div', {class:'hint', textContent:'เพิ่มรูปก่อน แล้วคลิกส่วนต่าง ๆ บนภาพเพื่อแก้ไขตำแหน่ง ขนาด และสี'})); return; }
   const chips = el('div', {class:'chips'}, chip('bg', 'พื้นหลัง'), p.els.map(e => chip(e.id, e.label)),
     el('button', {class:'chip add', type:'button', textContent:'+ ข้อความ', on:{click:addText}}));
-  box.append(el('h2', {textContent:'ส่วนของภาพ'}), chips);
+  box.append(movieBlock(p), el('h2', {textContent:'ส่วนของภาพ'}), chips);
   if(S.sel === 'bg'){ box.append(...bgInspector(p)); return; }
   const e = p.els.find(x => x.id === S.sel);
   if(!e){ S.sel = 'bg'; renderInspector(); return; }
@@ -755,7 +1060,7 @@ function elInspector(p, e){
   out.push(el('label', {class:'check'}, el('input', {type:'checkbox', checked:!!e.vis, on:{change:ev => { e.vis = ev.target.checked; invalidate(); }}}), 'แสดงบนภาพ'));
   if(cfg.text){
     const ctl = cfg.text === 'multi'
-      ? el('textarea', {rows:2, value:e.text || '', on:{input:ev => { e.text = ev.target.value; invalidate(); }}})
+      ? el('textarea', {rows:2, value:e.text || '', on:{input:ev => { e.text = ev.target.value; delete e.wrap; invalidate(); }}})
       : el('input', {type:'text', value:e.text || '', on:{input:ev => { e.text = ev.target.value; invalidate(); }}});
     out.push(el('div', {class:'field'}, el('label', {textContent:'ข้อความ'}), ctl));
   }
@@ -907,7 +1212,11 @@ $('#dlAllBtn').addEventListener('click', async () => {
   const btn = $('#dlAllBtn'); btn.disabled = true; btn.textContent = 'กำลังสร้าง ZIP…';
   try{
     const files = [];
-    for(const p of S.posters){ const ex = await exportBlob(p); files.push({name:`${fileBase(p)}.${extOf(ex.mime)}`, blob:ex.blob}); }
+    const dirs = useCatFolders(S.posters);
+    for(const p of S.posters){
+      const ex = await exportBlob(p);
+      files.push({name:`${dirs ? sanitize(catFolderName(p)) + '/' : ''}${fileBase(p)}.${extOf(ex.mime)}`, blob:ex.blob});
+    }
     const names = uniqNames(files.map(f => f.name)); files.forEach((f, i) => f.name = names[i]);
     saveAs(await makeZip(files), `posters-${todayName()}.zip`);
   }catch(e){ toast('สร้าง ZIP ไม่สำเร็จ'); }
@@ -988,8 +1297,15 @@ function syncOver(){
   const list = $('#saveForm').scope.value === 'all' ? S.posters : [cur()];
   $('#sdOverWrap').hidden = !list.some(p => p && p.srcItemId);
 }
-document.querySelectorAll('#saveForm input[name=scope]').forEach(r => r.addEventListener('change', syncOver));
-function syncNewField(){ $('#sdNewWrap').hidden = $('#sdFolder').value !== '__new'; }
+document.querySelectorAll('#saveForm input[name=scope]').forEach(r => r.addEventListener('change', () => { syncOver(); syncNewField(); }));
+function saveList(){ return $('#saveForm').scope.value === 'all' ? S.posters : [cur()].filter(Boolean); }
+function syncNewField(){
+  const list = saveList(), byCat = useCatFolders(list);
+  $('#sdByCatWrap').hidden = !list.some(p => p.cat);
+  $('#sdByCat').checked = S.byCat;
+  $('#sdFolderWrap').hidden = byCat;
+  $('#sdNewWrap').hidden = byCat || $('#sdFolder').value !== '__new';
+}
 $('#sdFolder').addEventListener('change', syncNewField);
 $('#sdCancel').addEventListener('click', () => saveDlg.close());
 $('#saveBtn').addEventListener('click', async () => {
@@ -1016,7 +1332,7 @@ async function saveItem(p, folderId, over){
   }
   await DB.put('blobs', {id, img:ex.blob, bg:p.bgBlob});
   await DB.put('items', {id, folderId, name:fileBase(p), createdAt, updatedAt:Date.now(), w:ex.w, h:ex.h, mime:ex.mime,
-    thumb:thumbURL(p), state:{bg:p.bg, els:cleanEls(p.els), size:S.size}});
+    thumb:thumbURL(p), state:{bg:p.bg, els:cleanEls(p.els), size:S.size, cat:p.cat || null, movieId:p.movie ? p.movie.id : null}});
   p.srcItemId = id;
 }
 $('#sdOk').addEventListener('click', async () => {
@@ -1025,13 +1341,17 @@ $('#sdOk').addEventListener('click', async () => {
     let fid = $('#sdFolder').value;
     const list = $('#saveForm').scope.value === 'all' ? S.posters.slice() : [cur()];
     const over = !$('#sdOverWrap').hidden && $('#sdOver').checked;
+    const byCat = useCatFolders(list), cache = {};
     const needsFolder = list.some(p => !(over && p.srcItemId));
-    if(fid === '__new' && needsFolder){
+    if(!byCat && fid === '__new' && needsFolder){
       fid = uid();
       await DB.put('folders', {id:fid, name:$('#sdNew').value.trim() || todayName(), createdAt:Date.now()});
     }
-    for(const p of list) await saveItem(p, fid, over);
-    if(fid !== '__new'){ try{ localStorage.setItem('lastFolder', fid); }catch(e){} }
+    for(const p of list){
+      const f = (byCat && !(over && p.srcItemId)) ? await folderIdByName(catFolderName(p), cache) : fid;
+      await saveItem(p, f, over);
+    }
+    if(!byCat && fid !== '__new'){ try{ localStorage.setItem('lastFolder', fid); }catch(e){} }
     saveDlg.close(); toast(`บันทึก ${list.length} รูปลงคลังแล้ว`); refreshLibCount();
   }catch(e){ toast('บันทึกไม่สำเร็จ — พื้นที่เบราว์เซอร์อาจเต็ม'); }
   btn.disabled = false;
@@ -1128,7 +1448,8 @@ async function editItem(it){
   try{
     const img = await blobToImg(rec.bg);
     if(it.state.size && SIZES[it.state.size]){ S.size = it.state.size; $('#sizeSel').value = S.size; }
-    const p = {id:uid(), img, bgBlob:rec.bg, bg:{...it.state.bg}, els:it.state.els.map(x => ({...x})), srcItemId:it.id};
+    const p = {id:uid(), img, bgBlob:rec.bg, bg:{...it.state.bg}, els:it.state.els.map(x => ({...x})), srcItemId:it.id,
+      cat:it.state.cat || null, movie:MOVIES.find(m => m.id === it.state.movieId) || null};
     S.posters.push(p); S.sel = 'bg';
     switchView('editor'); setCur(p.id); toast('เปิดรูปเพื่อแก้ไขแล้ว');
   }catch(e){ toast('เปิดรูปไม่ได้'); }
@@ -1221,9 +1542,42 @@ new ResizeObserver(() => moveBlob(true)).observe($('#tabs'));
 /* ================================================================
    เริ่มต้น
 ================================================================ */
+/* ================================================================
+   ตัวเลือกแยกประเภท / สีตามประเภท / บันทึกอัตโนมัติ
+================================================================ */
+function setByCat(v){
+  S.byCat = !!v; $('#byCat').checked = S.byCat; $('#sdByCat').checked = S.byCat;
+  if(saveDlg.open) syncNewField();
+}
+$('#byCat').addEventListener('change', e => setByCat(e.target.checked));
+$('#sdByCat').addEventListener('change', e => setByCat(e.target.checked));
+$('#catColor').addEventListener('change', e => {
+  S.catColor = e.target.checked;
+  S.posters.forEach(p => { if(p.cat) setAccent(p, S.catColor ? CAT_COLOR[p.cat] : DEFAULT_ACCENT); });
+  invalidate(); drawAllThumbs(); if(cur()) renderInspector();
+});
+$('#autoSaveBtn').addEventListener('click', async () => {
+  if(!S.posters.length) return;
+  if(!DB.db){ toast('เบราว์เซอร์นี้ไม่รองรับการบันทึกลงคลัง'); return; }
+  const btn = $('#autoSaveBtn'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก…';
+  try{
+    const cache = {}, counts = {};
+    for(const p of S.posters){
+      const name = catFolderName(p);
+      await saveItem(p, await folderIdByName(name, cache), true);
+      counts[name] = (counts[name] || 0) + 1;
+    }
+    refreshLibCount();
+    toast('บันทึกแล้ว → ' + Object.entries(counts).map(([k, v]) => `${k} ${v}`).join(' · '), 5000);
+  }catch(e){ toast('บันทึกไม่สำเร็จ — พื้นที่เบราว์เซอร์อาจเต็ม'); }
+  btn.textContent = label; btn.disabled = S.posters.length === 0;
+});
+
 document.fonts.addEventListener('loadingdone', () => { invalidate(); drawAllThumbs(); });
 window.addEventListener('resize', invalidate);
 (async function init(){
+  $('#movieList').replaceChildren(...MOVIES.map(m => el('option', {value:m.label})));
   syncStage(); renderInspector();
   try{ await DB.open(); }catch(e){ DB.db = null; }
   try{
