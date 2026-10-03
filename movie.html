@@ -10,7 +10,7 @@
 <style>
   :root{
     --bg:#0b0b0d; --panel:#1a1210; --panel2:#221715; --line:#3a2420; --text:#f5eee9; --muted:#b89a90;
-    --accent:#d61f2c; --accent2:#f2c40e;
+    --accent:#E50914; --accent2:#f2c40e;
   }
   *{box-sizing:border-box;}
   html{color-scheme:dark;}
@@ -222,15 +222,15 @@
   }
   /* ปุ่มหลักสีแดง: ไล่สีแบบเดียวกับก้อนสีของแถบเมนู */
   button:where(:not(.secondary, .danger, .chip)){
-    background:radial-gradient(120% 140% at 50% 30%, #ff6a7d 0%, #e0212b 55%, #b3121d 100%);
-    box-shadow:0 3px 12px rgba(224,33,43,.28);
+    background:radial-gradient(120% 140% at 50% 30%, #ff2b36 0%, #E50914 55%, #B20710 100%);
+    box-shadow:0 3px 12px rgba(229,9,20,.32);
   }
-  button:where(:not(.secondary, .danger, .chip)):hover{ box-shadow:0 6px 22px rgba(255,59,78,.5); }
-  button.secondary:hover{ border-color:#7a4a44; box-shadow:0 5px 16px rgba(255,59,78,.16); }
-  button.danger:hover{ box-shadow:0 5px 18px rgba(224,33,43,.35); }
+  button:where(:not(.secondary, .danger, .chip)):hover{ box-shadow:0 6px 22px rgba(229,9,20,.6); }
+  button.secondary:hover{ border-color:#7a4a44; box-shadow:0 5px 16px rgba(229,9,20,.2); }
+  button.danger:hover{ box-shadow:0 5px 18px rgba(229,9,20,.4); }
   .chip:hover{ border-color:#7a4a44; }
   .chip.on{ box-shadow:0 4px 16px rgba(242,196,14,.38); }
-  .seg button.on{ background:radial-gradient(120% 140% at 50% 30%, #ff6a7d 0%, #e0212b 55%, #b3121d 100%); box-shadow:0 0 14px rgba(255,59,78,.45) inset, 0 0 12px rgba(255,59,78,.3); }
+  .seg button.on{ background:radial-gradient(120% 140% at 50% 30%, #ff2b36 0%, #E50914 55%, #B20710 100%); box-shadow:0 0 14px rgba(255,80,90,.4) inset, 0 0 12px rgba(229,9,20,.4); }
   button:hover:not(:disabled){ transform:translateY(-1px); }
   button:active:not(:disabled){ transform:translateY(0) scale(.93); transition-duration:.12s; }
   /* แถบเมนูด้านล่างมีเอฟเฟกต์ของตัวเองอยู่แล้ว ไม่ต้องซ้ำ */
