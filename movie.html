@@ -61,13 +61,13 @@
   .tabs .goo{position:absolute; inset:0; pointer-events:none; filter:url(#goo);}
   .tabs .blob{
     position:absolute; top:6px; bottom:6px; left:var(--x); width:var(--w); border-radius:999px;
-    background:radial-gradient(120% 140% at 50% 30%, #ff6a7d 0%, #e0212b 55%, #b3121d 100%);
+    background:radial-gradient(120% 140% at 50% 30%, #ff2b36 0%, #E50914 55%, #B20710 100%);
   }
   .tabs .b1{transition:left .42s cubic-bezier(.34,1.45,.55,1), width .42s cubic-bezier(.34,1.45,.55,1);}
   .tabs .b2{transition:left .6s cubic-bezier(.25,.9,.35,1) .03s, width .6s cubic-bezier(.25,.9,.35,1) .03s;}
   .tabs .glow{
     position:absolute; top:10px; bottom:10px; left:var(--x); width:var(--w); border-radius:999px; pointer-events:none;
-    background:#ff3b4e; opacity:.5; filter:blur(16px); transition:left .5s cubic-bezier(.34,1.3,.55,1), width .5s cubic-bezier(.34,1.3,.55,1);
+    background:#E50914; opacity:.55; filter:blur(16px); transition:left .5s cubic-bezier(.34,1.3,.55,1), width .5s cubic-bezier(.34,1.3,.55,1);
   }
   .tabs.noanim .blob, .tabs.noanim .glow{transition:none;}
   .tabs button{
@@ -242,6 +242,15 @@
   }
   @keyframes ripple{ to{ transform:scale(1); opacity:0; } }
   @media (prefers-reduced-motion:reduce){ button{ transition:none !important; } .ripple{ display:none; } }
+
+  /* ปุ่มสร้างโปสเตอร์ที่เพิ่มเข้ารายการแก้ไขแล้ว: แดงเนตฟลิกซ์ (#E50914) แบบเงา */
+  button.queued, button.queued:hover{
+    background:linear-gradient(180deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.06) 48%, rgba(255,255,255,0) 50%),
+               linear-gradient(180deg, #f6121d 0%, #E50914 45%, #B20710 100%);
+    border:1px solid #8f0610; color:#fff;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.35), inset 0 -3px 7px rgba(80,0,5,.45), 0 3px 12px rgba(229,9,20,.45);
+  }
+  button.queued:hover{ box-shadow:inset 0 1px 0 rgba(255,255,255,.4), inset 0 -3px 7px rgba(80,0,5,.45), 0 6px 22px rgba(229,9,20,.65); }
 </style>
 </head>
 <body>
@@ -263,7 +272,7 @@
     </button>
     <button type="button" data-view="editor">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M12 8v8M8 12h8"/></svg>
-      <span>สร้างโปสเตอร์</span>
+      <span>สร้างโปสเตอร์ <span id="editCount"></span></span>
     </button>
     <button type="button" data-view="movies">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7.5 4.5v15M16.5 4.5v15M3.5 9h4M3.5 15h4M16.5 9h4M16.5 15h4"/></svg>
@@ -1007,6 +1016,7 @@ function renderStrip(){
     ul.append(li);
   });
   $('#stripCount').textContent = S.posters.length ? `(${S.posters.length})` : '';
+  const ec = $('#editCount'); if(ec) ec.textContent = S.posters.length ? `(${S.posters.length})` : '';
   drawAllThumbs();
 }
 function removePoster(id){
@@ -1795,8 +1805,11 @@ async function makePosterFromMovie(m){
   }catch(e){ blob = null; img = null; }
   if(!img){ ({img, blob} = await placeholderBg(m)); note = ' · ดึงรูปปกไม่ได้ ใช้พื้นหลังสีแทน (เปลี่ยนได้ที่ “เปลี่ยนรูปพื้นหลัง”)'; }
   const p = newPoster(img, blob, m.title); dressMovie(p, m);
-  S.posters.push(p); S.sel = 'bg'; switchView('editor'); setCur(p.id);
-  toast(`ใส่ข้อมูล “${m.title}” แล้ว · จัดตำแหน่งได้เลย${note}`, 5000);
+  S.posters.push(p);
+  if(!S.cur){ S.cur = p.id; S.sel = 'bg'; }
+  try{ syncStage(); renderStrip(); renderInspector(); }catch(e){}
+  toast(`เพิ่ม “${m.title}” แล้ว · รอแก้ไข ${S.posters.length} เรื่อง${note}`, 3500);
+  return true;
 }
 function renderMovies(){
   const body = $('#mvBody'), chips = $('#mvChips'); body.replaceChildren(); chips.replaceChildren();
@@ -1820,6 +1833,7 @@ function renderMovies(){
   const grid = el('div', {class:'mgrid'});
   list.forEach(m => {
     const done = doneIds.includes(m.id), src = coverSrc(m);
+    const queued = S.posters.some(q => q.movie && q.movie.id === m.id);
     const cov = el('div', {class:'cov', 'data-id':m.id, tabIndex:0, role:'button', title:'คลิกเพื่อเปลี่ยนรูปปกเอง', style:`--c:${CAT_COLOR[m.cat]}`,
       on:{click:() => { MV.pick = m; $('#movieFileInput').click(); }}},
       el('span', {class:'ph', textContent:'🎬'}), el('span', {class:'ctag', textContent:m.cat, style:`background:${CAT_COLOR[m.cat]}`}), el('span', {class:'sc', textContent:m.score}));
@@ -1831,7 +1845,12 @@ function renderMovies(){
         el('div', {class:'mc', title:m.caption, textContent:`“${m.caption}”`}),
         el('label', {class:'check'}, cb, 'ทำแล้ว'),
         el('div', {class:'btns'},
-          el('button', {type:'button', class:'small', textContent:'🎨 สร้างโปสเตอร์', on:{click:() => makePosterFromMovie(m)}}),
+          el('button', {type:'button', class:'small' + (queued ? ' queued' : ''), textContent:'🎨 สร้างโปสเตอร์', on:{click:async ev => {
+            const btn = ev.currentTarget;
+            if(S.posters.some(q => q.movie && q.movie.id === m.id)){ btn.classList.add('queued'); toast(`“${m.title}” อยู่ในรายการแก้ไขแล้ว`); return; }
+            btn.disabled = true;
+            try{ if(await makePosterFromMovie(m)) btn.classList.add('queued'); }finally{ btn.disabled = false; }
+          }}}),
           el('button', {type:'button', class:'secondary small', textContent:'คัดลอก', on:{click:() => {
             const t = `${m.title}${m.year ? ' (' + m.year + ')' : ''}\nคะแนน: ${m.score}\nแคปชั่น: "${m.caption}"`;
             (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('คัดลอกข้อมูลแล้ว'), () => toast('คัดลอกไม่สำเร็จ'));
