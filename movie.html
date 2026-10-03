@@ -18,7 +18,7 @@
   body{
     margin:0; background:var(--bg); color:var(--text);
     font-family:'Kanit',system-ui,sans-serif;
-    padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);
+    padding:env(safe-area-inset-top,0px) 0 calc(88px + env(safe-area-inset-bottom,0px));
   }
   h1,h2,h3{margin:0;}
   button{
@@ -32,7 +32,7 @@
   button.danger{background:#3a1416; border:1px solid #6b2226;}
   button:disabled{opacity:.5; cursor:default;}
   label{font-size:.8rem; color:var(--muted); display:block; margin-bottom:4px;}
-  input[type=text], textarea, select{
+  input[type=text], input[type=search], textarea, select{
     width:100%; background:#0d0f13; border:1px solid var(--line); border-radius:8px;
     color:var(--text); padding:8px 10px; font-family:inherit; font-size:.9rem;
   }
@@ -45,14 +45,40 @@
   .grow{flex:1; min-width:0;}
 
   /* header */
-  .top{max-width:1280px; margin:0 auto; padding:18px 16px 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;}
-  .brand{display:flex; align-items:center; gap:12px;}
+  .top{max-width:1280px; margin:0 auto; padding:18px 16px 12px; display:flex; align-items:center; justify-content:center; gap:12px;}
+  .brand{display:flex; align-items:center; justify-content:center; gap:12px;}
   .brand img{height:40px; width:auto;}
   .brand h1{font-size:1.1rem; font-weight:800; color:var(--accent2); letter-spacing:.02em;}
   .brand span{font-size:.75rem; color:var(--muted);}
-  .tabs{display:flex; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:4px;}
-  .tabs button{background:none; color:var(--muted); padding:8px 14px; border-radius:9px;}
-  .tabs button.on{background:var(--accent); color:#fff;}
+  /* liquid navbar */
+  .tabs{
+    position:fixed; left:50%; bottom:calc(12px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); z-index:40;
+    width:min(460px, calc(100% - 24px)); display:flex; padding:6px; border-radius:999px;
+    background:rgba(28,19,17,.62); -webkit-backdrop-filter:blur(16px) saturate(1.5); backdrop-filter:blur(16px) saturate(1.5);
+    border:1px solid rgba(255,255,255,.1); box-shadow:0 10px 32px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.07);
+    --x:6px; --w:100px;
+  }
+  .tabs .goo{position:absolute; inset:0; pointer-events:none; filter:url(#goo);}
+  .tabs .blob{
+    position:absolute; top:6px; bottom:6px; left:var(--x); width:var(--w); border-radius:999px;
+    background:radial-gradient(120% 140% at 50% 30%, #ff6a7d 0%, #e0212b 55%, #b3121d 100%);
+  }
+  .tabs .b1{transition:left .42s cubic-bezier(.34,1.45,.55,1), width .42s cubic-bezier(.34,1.45,.55,1);}
+  .tabs .b2{transition:left .6s cubic-bezier(.25,.9,.35,1) .03s, width .6s cubic-bezier(.25,.9,.35,1) .03s;}
+  .tabs .glow{
+    position:absolute; top:10px; bottom:10px; left:var(--x); width:var(--w); border-radius:999px; pointer-events:none;
+    background:#ff3b4e; opacity:.5; filter:blur(16px); transition:left .5s cubic-bezier(.34,1.3,.55,1), width .5s cubic-bezier(.34,1.3,.55,1);
+  }
+  .tabs.noanim .blob, .tabs.noanim .glow{transition:none;}
+  .tabs button{
+    position:relative; z-index:1; flex:1; min-width:0; background:none; color:var(--muted); border-radius:999px;
+    padding:8px 4px 7px; display:flex; flex-direction:column; align-items:center; gap:3px; font-weight:600; font-size:.68rem; white-space:nowrap;
+    transition:color .3s;
+  }
+  .tabs button:hover{filter:none; color:var(--text);}
+  .tabs button svg{width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; transition:transform .45s cubic-bezier(.34,1.7,.55,1);}
+  .tabs button.on{color:#fff;}
+  .tabs button.on svg{transform:translateY(-1px) scale(1.14);}
 
   .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px;}
   .panel h2{font-size:.95rem; font-weight:800; color:var(--accent2);}
@@ -112,6 +138,23 @@
   .card .btns{display:flex; gap:6px; flex-wrap:wrap; padding:8px 12px 12px;}
   .empty{color:var(--muted); padding:40px 0; text-align:center;}
 
+  /* home */
+  #viewHome{max-width:1280px; margin:0 auto; padding:0 16px 40px;}
+  .hero{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:6px 0 14px;}
+  .hero h2{font-size:1.6rem; font-weight:800;}
+  .search{flex:1 1 320px; max-width:520px;}
+  .search input{font-size:1.05rem; padding:12px 16px; border-radius:12px;}
+  .homebar{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:16px;}
+  .homebar select{width:auto; min-width:140px;}
+  .masonry{column-width:210px; column-gap:14px;}
+  .mcard{break-inside:avoid; display:inline-block; width:100%; margin:0 0 14px; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
+  .mcard .pic{display:block; cursor:pointer; background:#000;}
+  .mcard .pic img{display:block; width:100%; height:auto;}
+  .mcard .info{padding:10px 12px 4px;}
+  .mcard .info b{display:block; font-size:.92rem; overflow-wrap:anywhere;}
+  .mcard .info span{font-size:.72rem; color:var(--muted);}
+  .mcard .btns{display:flex; gap:6px; padding:8px 12px 12px;}
+
   dialog{background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:18px; width:min(420px,92vw);}
   dialog::backdrop{background:rgba(0,0,0,.68);}
   dialog form{display:flex; flex-direction:column; gap:12px;}
@@ -120,7 +163,7 @@
   .opt{display:flex; gap:8px; align-items:center; font-size:.88rem; color:var(--text); margin:0;}
 
   #toast{
-    position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,20px); opacity:0;
+    position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,20px); opacity:0;
     background:#2a1e1c; border:1px solid var(--accent2); color:var(--text); padding:10px 16px; border-radius:10px; font-size:.85rem;
     transition:opacity .2s, transform .2s; pointer-events:none; z-index:50; max-width:90vw;
   }
@@ -132,7 +175,7 @@
     .strip ul{flex-direction:row; max-height:none; overflow-x:auto; padding-bottom:4px;}
     .thumb{width:104px;}
   }
-  @media (prefers-reduced-motion:reduce){ #toast{transition:none;} }
+  @media (prefers-reduced-motion:reduce){ #toast{transition:none;} .tabs .blob,.tabs .glow,.tabs button svg{transition:none !important;} }
 </style>
 </head>
 <body>
@@ -145,14 +188,52 @@
       <span>เครื่องมือสร้างโปสเตอร์รีวิวหนัง</span>
     </div>
   </div>
-  <nav class="tabs" aria-label="เมนูหลัก">
-    <button type="button" class="on" data-view="editor">สร้างโปสเตอร์</button>
-    <button type="button" data-view="library">คลังภาพ <span id="libCount"></span></button>
+  <nav class="tabs" id="tabs" aria-label="เมนูหลัก">
+    <div class="goo" aria-hidden="true"><span class="blob b2"></span><span class="blob b1"></span></div>
+    <span class="glow" aria-hidden="true"></span>
+    <button type="button" class="on" data-view="home">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5a1 1 0 0 0 1 1H10v-6h4v6h3.5a1 1 0 0 0 1-1V10"/></svg>
+      <span>หน้าแรก</span>
+    </button>
+    <button type="button" data-view="editor">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M12 8v8M8 12h8"/></svg>
+      <span>สร้างโปสเตอร์</span>
+    </button>
+    <button type="button" data-view="library">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
+      <span>คลังภาพ <span id="libCount"></span></span>
+    </button>
   </nav>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+    <filter id="goo" x="-10%" y="-30%" width="120%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="11" result="b"/>
+      <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -11"/>
+    </filter>
+  </defs></svg>
 </header>
 
+<!-- ============ HOME ============ -->
+<main id="viewHome">
+  <section class="hero">
+    <div>
+      <h2>ผลงานทั้งหมด</h2>
+      <div class="hint" id="homeSub"></div>
+    </div>
+    <div class="search"><input type="search" id="homeQ" placeholder="ค้นหาชื่อหนัง…" aria-label="ค้นหาชื่อหนัง" autocomplete="off"></div>
+  </section>
+  <div class="homebar">
+    <div class="chips" id="homeChips"></div>
+    <select id="homeSort" aria-label="เรียงลำดับ">
+      <option value="new">ใหม่ล่าสุดก่อน</option>
+      <option value="old">เก่าสุดก่อน</option>
+      <option value="name">ชื่อ ก–ฮ / A–Z</option>
+    </select>
+  </div>
+  <div id="homeBody"></div>
+</main>
+
 <!-- ============ EDITOR ============ -->
-<main id="viewEditor">
+<main id="viewEditor" hidden>
   <aside class="panel strip" aria-label="รูปในชุดนี้">
     <h2>รูปในชุด <span id="stripCount" class="hint"></span></h2>
     <button type="button" id="addBtn">+ เพิ่มรูป</button>
@@ -212,6 +293,7 @@
       <label for="sdFolder">โฟลเดอร์</label>
       <select id="sdFolder"></select>
     </div>
+    <label class="opt" id="sdOverWrap" hidden><input type="checkbox" id="sdOver" checked> อัปเดตรูปที่เปิดมาจากคลัง (แทนที่ของเดิมในโฟลเดอร์เดิม)</label>
     <div id="sdNewWrap">
       <label for="sdNew">ชื่อโฟลเดอร์ใหม่</label>
       <input type="text" id="sdNew">
@@ -270,7 +352,7 @@ const TYPE = {
 ================================================================ */
 const S = {
   posters: [], cur: null, sel: 'bg', size: '4:5', fmt: 'png',
-  logoImg: null, view: 'editor', guide: false
+  logoImg: null, view: 'home', guide: false
 };
 const $ = (s, r=document) => r.querySelector(s);
 const cv = $('#cv');
@@ -811,7 +893,7 @@ function uniqNames(names){
     const i = n.lastIndexOf('.'); return `${n.slice(0,i)} (${seen[n]})${n.slice(i)}`; });
 }
 function thumbURL(p){
-  const {w, h} = SIZES[S.size], tw = 240, c = document.createElement('canvas');
+  const {w, h} = SIZES[S.size], tw = 360, c = document.createElement('canvas');
   c.width = tw; c.height = Math.round(tw*h/w);
   renderPoster(p, c.getContext('2d'), c.width, c.height, null);
   return c.toDataURL('image/jpeg', .8);
@@ -902,6 +984,11 @@ const DB = {
    บันทึกลงคลัง
 ================================================================ */
 const saveDlg = $('#saveDlg');
+function syncOver(){
+  const list = $('#saveForm').scope.value === 'all' ? S.posters : [cur()];
+  $('#sdOverWrap').hidden = !list.some(p => p && p.srcItemId);
+}
+document.querySelectorAll('#saveForm input[name=scope]').forEach(r => r.addEventListener('change', syncOver));
 function syncNewField(){ $('#sdNewWrap').hidden = $('#sdFolder').value !== '__new'; }
 $('#sdFolder').addEventListener('change', syncNewField);
 $('#sdCancel').addEventListener('click', () => saveDlg.close());
@@ -918,25 +1005,33 @@ $('#saveBtn').addEventListener('click', async () => {
   $('#sdOne').textContent = titleOf(cur());
   $('#sdAll').textContent = S.posters.length;
   $('#saveForm').scope.value = 'one';
-  syncNewField(); saveDlg.showModal();
+  syncNewField(); syncOver(); saveDlg.showModal();
 });
-async function saveItem(p, folderId){
-  const ex = await exportBlob(p), id = uid();
+async function saveItem(p, folderId, over){
+  const ex = await exportBlob(p);
+  let id = uid(), createdAt = Date.now();
+  if(over && p.srcItemId){
+    const old = await DB.get('items', p.srcItemId);
+    if(old){ id = old.id; folderId = old.folderId; createdAt = old.createdAt; }
+  }
   await DB.put('blobs', {id, img:ex.blob, bg:p.bgBlob});
-  await DB.put('items', {id, folderId, name:fileBase(p), createdAt:Date.now(), w:ex.w, h:ex.h, mime:ex.mime,
+  await DB.put('items', {id, folderId, name:fileBase(p), createdAt, updatedAt:Date.now(), w:ex.w, h:ex.h, mime:ex.mime,
     thumb:thumbURL(p), state:{bg:p.bg, els:cleanEls(p.els), size:S.size}});
+  p.srcItemId = id;
 }
 $('#sdOk').addEventListener('click', async () => {
   const btn = $('#sdOk'); btn.disabled = true;
   try{
     let fid = $('#sdFolder').value;
-    if(fid === '__new'){
+    const list = $('#saveForm').scope.value === 'all' ? S.posters.slice() : [cur()];
+    const over = !$('#sdOverWrap').hidden && $('#sdOver').checked;
+    const needsFolder = list.some(p => !(over && p.srcItemId));
+    if(fid === '__new' && needsFolder){
       fid = uid();
       await DB.put('folders', {id:fid, name:$('#sdNew').value.trim() || todayName(), createdAt:Date.now()});
     }
-    const list = $('#saveForm').scope.value === 'all' ? S.posters.slice() : [cur()];
-    for(const p of list) await saveItem(p, fid);
-    try{ localStorage.setItem('lastFolder', fid); }catch(e){}
+    for(const p of list) await saveItem(p, fid, over);
+    if(fid !== '__new'){ try{ localStorage.setItem('lastFolder', fid); }catch(e){} }
     saveDlg.close(); toast(`บันทึก ${list.length} รูปลงคลังแล้ว`); refreshLibCount();
   }catch(e){ toast('บันทึกไม่สำเร็จ — พื้นที่เบราว์เซอร์อาจเต็ม'); }
   btn.disabled = false;
@@ -1033,22 +1128,95 @@ async function editItem(it){
   try{
     const img = await blobToImg(rec.bg);
     if(it.state.size && SIZES[it.state.size]){ S.size = it.state.size; $('#sizeSel').value = S.size; }
-    const p = {id:uid(), img, bgBlob:rec.bg, bg:{...it.state.bg}, els:it.state.els.map(x => ({...x}))};
+    const p = {id:uid(), img, bgBlob:rec.bg, bg:{...it.state.bg}, els:it.state.els.map(x => ({...x})), srcItemId:it.id};
     S.posters.push(p); S.sel = 'bg';
     switchView('editor'); setCur(p.id); toast('เปิดรูปเพื่อแก้ไขแล้ว');
   }catch(e){ toast('เปิดรูปไม่ได้'); }
 }
+
+
+/* ================================================================
+   หน้าแรก — โชว์ผลงานทั้งหมดจากคลัง + ค้นหาชื่อหนัง
+================================================================ */
+const H = {items:[], folders:[], q:'', folder:'all', sort:'new'};
+async function loadHome(){
+  if(DB.db){
+    try{
+      const [folders, items] = await Promise.all([DB.all('folders'), DB.all('items')]);
+      const fm = Object.fromEntries(folders.map(f => [f.id, f.name]));
+      H.folders = folders.sort((a, b) => a.createdAt - b.createdAt);
+      H.items = items.map(it => {
+        const texts = ((it.state && it.state.els) || []).filter(e => e.text).map(e => e.text);
+        const folderName = fm[it.folderId] || '';
+        return {...it, folderName, stamp:it.updatedAt || it.createdAt,
+          hay:[it.name, folderName, ...texts].join(' ').toLowerCase()};
+      });
+    }catch(e){ H.items = []; H.folders = []; }
+  }
+  if(H.folder !== 'all' && !H.folders.some(f => f.id === H.folder)) H.folder = 'all';
+  renderHome();
+  $('#libCount').textContent = H.items.length ? `(${H.items.length})` : '';
+}
+function renderHome(){
+  const body = $('#homeBody'); body.replaceChildren();
+  const chips = $('#homeChips'); chips.replaceChildren();
+  const total = H.items.length;
+  $('#homeSub').textContent = total ? `${total} รูป · ${H.folders.length} โฟลเดอร์` : '';
+  if(!DB.db){ body.append(el('div', {class:'empty', textContent:'เบราว์เซอร์นี้ไม่รองรับการบันทึกลงคลัง'})); return; }
+  if(!total){
+    body.append(el('div', {class:'empty'},
+      el('p', {textContent:'ยังไม่มีผลงานในคลัง'}),
+      el('button', {type:'button', textContent:'สร้างโปสเตอร์แรก', on:{click:() => switchView('editor')}})));
+    return;
+  }
+  const mk = (id, label) => el('button', {type:'button', class:'chip' + (H.folder === id ? ' on' : ''), textContent:label,
+    on:{click:() => { H.folder = id; renderHome(); }}});
+  chips.append(mk('all', `ทั้งหมด (${total})`), ...H.folders.map(f => mk(f.id, `${f.name} (${H.items.filter(i => i.folderId === f.id).length})`)));
+
+  const terms = H.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const list = H.items.filter(it => (H.folder === 'all' || it.folderId === H.folder) && terms.every(t => it.hay.includes(t)));
+  if(H.sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name, 'th'));
+  else list.sort((a, b) => H.sort === 'old' ? a.stamp - b.stamp : b.stamp - a.stamp);
+  if(H.q.trim()) $('#homeSub').textContent = `พบ ${list.length} จาก ${total} รูป`;
+
+  if(!list.length){ body.append(el('div', {class:'empty', textContent:H.q.trim() ? `ไม่พบ “${H.q.trim()}”` : 'ไม่มีรูปในโฟลเดอร์นี้'})); return; }
+  const wall = el('div', {class:'masonry'});
+  list.forEach(it => {
+    const date = new Date(it.stamp).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
+    wall.append(el('article', {class:'mcard'},
+      el('div', {class:'pic', tabIndex:0, role:'button', 'aria-label':`ดูภาพ ${it.name}`,
+        on:{click:() => previewItem(it), keydown:ev => { if(ev.key === 'Enter') previewItem(it); }}},
+        el('img', {src:it.thumb, alt:it.name, loading:'lazy'})),
+      el('div', {class:'info'}, el('b', {textContent:it.name}), el('span', {textContent:`${it.folderName ? it.folderName + ' · ' : ''}${date}`})),
+      el('div', {class:'btns'},
+        el('button', {type:'button', class:'small', textContent:'แก้ไข', on:{click:() => editItem(it)}}),
+        el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}))));
+  });
+  body.append(wall);
+}
+$('#homeQ').addEventListener('input', e => { H.q = e.target.value; renderHome(); });
+$('#homeSort').addEventListener('change', e => { H.sort = e.target.value; renderHome(); });
 
 /* ================================================================
    สลับหน้า
 ================================================================ */
 function switchView(v){
   S.view = v;
-  $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library';
+  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library';
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
-  if(v === 'library') renderLibrary(); else invalidate();
+  moveBlob();
+  if(v === 'library') renderLibrary(); else if(v === 'home') loadHome(); else invalidate();
 }
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
+function moveBlob(instant){
+  const nav = $('#tabs'), b = nav.querySelector('button.on'); if(!b) return;
+  if(instant) nav.classList.add('noanim');
+  nav.style.setProperty('--x', (b.offsetLeft + 4) + 'px');
+  nav.style.setProperty('--w', (b.offsetWidth - 8) + 'px');
+  if(instant){ void nav.offsetWidth; nav.classList.remove('noanim'); }
+}
+moveBlob(true);
+new ResizeObserver(() => moveBlob(true)).observe($('#tabs'));
 
 /* ================================================================
    เริ่มต้น
@@ -1063,7 +1231,7 @@ window.addEventListener('resize', invalidate);
     S.logoImg = rec && rec.blob ? await blobToImg(rec.blob) : await srcToImg(DEFAULT_LOGO);
   }catch(e){ try{ S.logoImg = await srcToImg(DEFAULT_LOGO); }catch(_){} }
   if(S.logoImg) $('#brandLogo').src = S.logoImg.src;
-  refreshLibCount();
+  loadHome();
   ensureFonts().then(() => { invalidate(); drawAllThumbs(); });
 })();
 </script>
