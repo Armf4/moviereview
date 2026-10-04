@@ -379,7 +379,7 @@
       <div class="hint" id="mvSub"></div>
     </div>
     <div class="search"><input type="search" id="mvQ" placeholder="ค้นหาชื่อหนัง / แคปชั่น…" aria-label="ค้นหาหนัง" autocomplete="off"></div>
-    <div class="mvtools"><button type="button" class="secondary" id="mvImport">📥 นำเข้า Excel</button></div>
+    <div class="mvtools"><button type="button" class="secondary" id="mvImport">📥 นำเข้า Excel</button><button type="button" class="secondary" id="mvExport">📤 ส่งออกทั้งหมด</button></div>
   </section>
   <div class="prog" aria-hidden="true"><i id="mvBar"></i></div>
   <div class="homebar">
@@ -2098,6 +2098,15 @@ function impReset(){
 $('#mvImport').addEventListener('click', () => { impReset(); impDlg.showModal(); });
 $('#impCancel').addEventListener('click', () => impDlg.close());
 $('#impPick').addEventListener('click', () => { $('#impFile').value = ''; $('#impFile').click(); });
+$('#mvExport').addEventListener('click', () => {
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const head = ['ชื่อหนัง (Title)', 'ปี', 'หมวด', 'คะแนน', 'แคปชั่น', 'ชื่ออื่น'];
+  const rows = MOVIES.map(m => [m.title, m.year || '', m.cat, m.score, m.caption, (MOVIE_ALIASES[m.id] || []).join(', ')]);
+  const csv = '\uFEFF' + [head, ...rows].map(r => r.map(q).join(',')).join('\r\n');
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  saveAs(new Blob([csv], {type:'text/csv;charset=utf-8'}), `movies-all-${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}.csv`);
+  toast(`ส่งออกหนัง ${MOVIES.length} เรื่องแล้ว`);
+});
 $('#impTpl').addEventListener('click', () => {
   const csv = '\uFEFFชื่อหนัง (Title),ปี,หมวด,คะแนน,แคปชั่น,ชื่ออื่น\r\n' +
     'Bad Genius,2017,Thriller,9.0/10,"ความฉลาดคืออาวุธ แต่ก็เป็นกับดักได้เหมือนกัน","ฉลาดเกมส์โกง"\r\n';
