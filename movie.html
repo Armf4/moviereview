@@ -1708,16 +1708,26 @@ async function delFolder(f, its){
   for(const it of its){ await DB.del('items', it.id); await DB.del('blobs', it.id); }
   await DB.del('folders', f.id); renderLibrary();
 }
-async function editItem(it){
-  const rec = await DB.get('blobs', it.id); if(!rec) return;
+// stay=true: เพิ่มเข้ารายการสร้างโปสเตอร์เฉย ๆ ไม่สลับหน้า (คืนค่า true เมื่อเพิ่มสำเร็จ)
+async function editItem(it, stay){
+  if(stay && S.posters.some(q => q.srcItemId === it.id)){ toast(`“${it.name}” อยู่ในรายการสร้างโปสเตอร์แล้ว`); return true; }
+  const rec = await DB.get('blobs', it.id); if(!rec) return false;
   try{
     const img = await blobToImg(rec.bg);
     if(it.state.size && SIZES[it.state.size]){ S.size = it.state.size; $('#sizeSel').value = S.size; }
     const p = {id:uid(), img, bgBlob:rec.bg, bg:{...it.state.bg}, els:it.state.els.map(x => ({...x})), srcItemId:it.id,
       cat:it.state.cat || null, movie:MOVIES.find(m => m.id === it.state.movieId) || null};
-    S.posters.push(p); S.sel = 'bg';
+    S.posters.push(p);
+    if(stay){
+      if(!S.cur) { S.cur = p.id; S.sel = 'bg'; }
+      try{ renderStrip(); syncStage(); renderInspector(); invalidate(); }catch(e){ console.error(e); }
+      toast(`เพิ่ม “${it.name}” ลงรายการสร้างโปสเตอร์แล้ว (${S.posters.length})`);
+      return true;
+    }
+    S.sel = 'bg';
     switchView('editor'); setCur(p.id); toast('เปิดรูปเพื่อแก้ไขแล้ว');
-  }catch(e){ toast('เปิดรูปไม่ได้'); }
+    return true;
+  }catch(e){ console.error('editItem', e); toast('เปิดรูปไม่ได้'); return false; }
 }
 
 
@@ -1926,7 +1936,10 @@ function renderHome(){
     wall.append(el('article', {class:'mcard'}, pic,
       el('div', {class:'info'}, el('b', {textContent:it.name}), el('span', {textContent:`${it.folderName ? it.folderName + ' · ' : ''}${date}`})),
       el('div', {class:'btns'},
-        el('button', {type:'button', class:'small', textContent:'แก้ไข', on:{click:() => editItem(it)}}),
+        el('button', {type:'button', class:'small' + (S.posters.some(q => q.srcItemId === it.id) ? ' queued' : ''),
+          textContent:S.posters.some(q => q.srcItemId === it.id) ? '✓ อยู่ในรายการแล้ว' : 'แก้ไข', title:'เพิ่มเข้ารายการสร้างโปสเตอร์ (ไม่สลับหน้า)',
+          on:{click:async ev => { const b = ev.currentTarget; b.disabled = true; const ok = await editItem(it, true); b.disabled = false;
+            if(ok){ b.textContent = '✓ อยู่ในรายการแล้ว'; b.classList.add('queued'); } }}}),
         el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}),
         ...postButtons(it, pic, () => keepScroll(renderHome)))));
   });
