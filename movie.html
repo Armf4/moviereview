@@ -454,10 +454,11 @@
   <section class="hero plannerHero">
     <div>
       <h2>📅 Facebook Planner</h2>
-      <div class="hint" id="plannerSub">วางแผนโพสต์จากรายการหนังในระบบ โดยยังไม่ส่ง Facebook</div>
+      <div class="hint" id="plannerSub">วางแผนจาก “ปกที่ทำเสร็จแล้ว” เท่านั้น · เตรียมพร้อมส่ง Facebook</div>
     </div>
     <div class="plannerActions">
       <button type="button" class="secondary" id="plannerClearBtn">ล้างแพลน</button>
+      <button type="button" class="secondary" id="plannerAllBtn">🎬 เอาปกที่ทำแล้วทั้งหมด</button>
       <button type="button" id="plannerGenerateBtn">✨ สร้างแพลน 30 วัน</button>
     </div>
   </section>
@@ -2038,7 +2039,19 @@ async function plannerLoadRemote(){
 }
 function plannerMovie(id){ return MOVIES.find(m=>String(m.id)===String(id)); }
 function plannerFormatDate(s){ return new Date(s+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short',year:'numeric'}); }
-function plannerCover(m){ return (typeof coverSrc==='function' ? coverSrc(m) : null) || (typeof COVER_URL!=='undefined' ? COVER_URL[m.id] : null) || null; }
+function plannerMoviePoster(m){
+  if(!m || !Array.isArray(H.items)) return null;
+  const matches=H.items.filter(it=>String(it.state?.movieId||'')===String(m.id) && it.thumb);
+  if(!matches.length) return null;
+  matches.sort((a,b)=>(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
+  return matches[0].thumb || null;
+}
+function plannerCover(m){
+  return plannerMoviePoster(m)
+    || (typeof coverSrc==='function' ? coverSrc(m) : null)
+    || (typeof COVER_URL!=='undefined' ? COVER_URL[m.id] : null)
+    || null;
+}
 function plannerCaption(m){ return fbPost(m); }
 function plannerRenderTimes(){
   const host=$('#plannerTimes'); host.replaceChildren();
@@ -2053,14 +2066,20 @@ function plannerRenderChips(){
   const active=window.PLANNER_CAT||'all';
   cats.forEach(c=>host.append(el('button',{type:'button',class:'chip'+(active===c?' on':''),textContent:c==='all'?'ทุกหมวด':c,on:{click:()=>{window.PLANNER_CAT=c; plannerRender();}}})));
 }
-function plannerEntryPoster(e){ const m=plannerMovie(e.movieId); return e.imageUrl || (m&&plannerCover(m)); }
+function plannerEntryPoster(e){
+  const m=plannerMovie(e.movieId);
+  // Prefer the finished poster saved in the homepage/library.
+  // Fall back to the stored planner image, then the movie cover source.
+  return (m&&plannerMoviePoster(m)) || e.imageUrl || (m&&plannerCover(m));
+}
 function plannerRender(){
   $('#plannerDays').value=PLANNER.days; $('#plannerPerDay').value=PLANNER.perDay;
   $('#plannerNoRepeat').checked=!!PLANNER.noRepeat; $('#plannerRotateCat').checked=!!PLANNER.rotateCat; $('#plannerHighAtNight').checked=!!PLANNER.highAtNight;
   plannerRenderTimes(); plannerRenderChips();
   const entries=PLANNER.entries.slice().sort((a,b)=>(a.scheduledAt||'').localeCompare(b.scheduledAt||''));
   const filtered=entries.filter(e=>window.PLANNER_CAT==='all'||!window.PLANNER_CAT||plannerMovie(e.movieId)?.cat===window.PLANNER_CAT);
-  $('#plannerStats').textContent=`${filtered.length} โพสต์ · ${new Set(filtered.map(e=>e.date)).size} วัน`;
+  const readyPosterCount=MOVIES.filter(m=>m && !m.deleted && plannerMoviePoster(m)).length;
+  $('#plannerStats').textContent=`${filtered.length} โพสต์ · ${new Set(filtered.map(e=>e.date)).size} วัน · ปกพร้อมใช้ ${readyPosterCount} เรื่อง`;
   $('#plannerSub').textContent=entries.length?`มีแพลน ${entries.length} โพสต์ · ยังไม่ส่ง Facebook`: 'ยังไม่มีแพลน — กด “สร้างแพลน 30 วัน”';
   $('#plannerCount').textContent=entries.length?`(${entries.length})`:'';
   const body=$('#plannerBody'); body.replaceChildren();
@@ -2096,14 +2115,40 @@ function plannerSwap(id){
   e.movieId=found.id; e.caption=plannerCaption(found); e.imageUrl=plannerCover(found)||null; e.updatedAt=Date.now(); e.status='ready'; plannerSave().then(plannerRender);
 }
 function plannerDelete(id){ PLANNER.entries=PLANNER.entries.filter(x=>x.id!==id); plannerSave().then(plannerRender); }
+function plannerGenerateAllCompleted(){
+  const completed=MOVIES.filter(m=>m && !m.deleted && plannerMoviePoster(m));
+  const already=new Set(PLANNER.entries.map(e=>String(e.movieId)));
+  const available=completed.filter(m=>!already.has(String(m.id)));
+  if(!available.length){toast('ปกที่ทำเสร็จแล้วถูกใส่ในแพลนครบหมดแล้ว');return;}
+  const perDay=Math.max(1,Math.min(6,+$('#plannerPerDay').value||3));
+  const times=PLANNER.times.slice().filter(Boolean).sort();
+  while(times.length<perDay) times.push(['12:00','15:30','18:30','21:00','22:00'][times.length]||'12:00');
+  const start=new Date(); start.setHours(0,0,0,0);
+  const days=Math.ceil(available.length/perDay);
+  const sorted=available.slice().sort((a,b)=>(parseFloat(String(b.score).replace(/[^\d.]/g,''))||0)-(parseFloat(String(a.score).replace(/[^\d.]/g,''))||0));
+  const cats=[...new Set(sorted.map(m=>m.cat).filter(Boolean))]; let catCursor=0; const result=[];
+  for(let i=0;i<sorted.length;i++){
+    const d=Math.floor(i/perDay), j=i%perDay;
+    const date=new Date(start); date.setDate(start.getDate()+d); const ds=plannerDateKey(date);
+    let candidates=sorted.filter(m=>!result.some(e=>String(e.movieId)===String(m.id)));
+    let m;
+    if(PLANNER.rotateCat && cats.length){ const wanted=cats[catCursor%cats.length]; m=candidates.find(x=>x.cat===wanted)||candidates[0]; catCursor++; } else m=candidates[0];
+    if(PLANNER.highAtNight && j===perDay-1){ const top=candidates.filter(x=>(parseFloat(String(x.score).replace(/[^\d.]/g,''))||0)>=8.5); if(top.length) m=top[0]; }
+    result.push({id:'pl_'+Date.now()+'_'+i,movieId:m.id,date:ds,time:times[j],scheduledAt:ds+'T'+times[j],caption:plannerCaption(m),imageUrl:plannerMoviePoster(m)||null,status:'ready',createdAt:Date.now(),updatedAt:Date.now()});
+  }
+  PLANNER.entries=[...PLANNER.entries,...result]; PLANNER.days=days; PLANNER.perDay=perDay; PLANNER.startDate=plannerDateKey(start);
+  plannerSave().then(()=>{plannerRender();toast(`เพิ่มปกที่ทำแล้ว ${result.length} เรื่อง ลงแพลน ${days} วันเรียบร้อย`);});
+}
 function plannerGenerate(){
   const days=Math.max(1,Math.min(90,+$('#plannerDays').value||30));
   const perDay=Math.max(1,Math.min(6,+$('#plannerPerDay').value||3));
   const times=PLANNER.times.slice().filter(Boolean).sort(); while(times.length<perDay){ times.push(['12:00','15:30','18:30','21:00','22:00'][times.length]||'12:00'); }
   const start=PLANNER.startDate?new Date(PLANNER.startDate+'T00:00:00'):plannerToday();
   const existingIds=new Set(PLANNER.entries.map(e=>String(e.movieId)));
-  const pool=MOVIES.filter(m=>m && !m.deleted && (!PLANNER.noRepeat || !existingIds.has(String(m.id))));
-  if(!pool.length){toast('ไม่มีหนังที่ยังวางแพลนได้');return;}
+  // สำคัญ: เอาเฉพาะหนังที่มีโปสเตอร์ที่ทำเสร็จและบันทึกไว้ในคลังหน้าแรก
+  const completedMovies=MOVIES.filter(m=>m && !m.deleted && plannerMoviePoster(m));
+  const pool=completedMovies.filter(m=>!PLANNER.noRepeat || !existingIds.has(String(m.id)));
+  if(!pool.length){toast('ยังไม่มีหนังที่ทำปกเสร็จและพร้อมลงแพลน');return;}
   const sorted=pool.slice().sort((a,b)=>(parseFloat(String(b.score).replace(/[^\d.]/g,''))||0)-(parseFloat(String(a.score).replace(/[^\d.]/g,''))||0));
   const result=[]; let cursor=0, catCursor=0; const cats=[...new Set(sorted.map(m=>m.cat).filter(Boolean))];
   for(let d=0;d<days;d++){
@@ -2123,6 +2168,7 @@ function plannerGenerate(){
   plannerSave().then(()=>{plannerRender();toast(`สร้างแพลนเพิ่ม ${result.length} โพสต์แล้ว`);});
 }
 $('#plannerGenerateBtn')?.addEventListener('click',plannerGenerate);
+$('#plannerAllBtn')?.addEventListener('click',plannerGenerateAllCompleted);
 $('#plannerClearBtn')?.addEventListener('click',()=>{if(confirm('ล้างแพลนทั้งหมด?')){PLANNER.entries=[];plannerSave().then(plannerRender);}});
 $('#plannerDays')?.addEventListener('change',e=>{PLANNER.days=+e.target.value||30;plannerSave();});
 $('#plannerPerDay')?.addEventListener('change',e=>{PLANNER.perDay=+e.target.value||3;plannerSave();});
