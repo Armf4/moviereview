@@ -148,12 +148,17 @@
   .homebar select{width:auto; min-width:140px;}
   .masonry{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; align-items:stretch;}
   .mcard{display:flex; flex-direction:column; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
-  .mcard .pic{display:block; cursor:pointer; background:#000; aspect-ratio:4/5; overflow:hidden;}
+  .mcard .pic{display:block; cursor:pointer; background:#000; aspect-ratio:4/5; overflow:hidden; position:relative;}
   .mcard .pic img{display:block; width:100%; height:100%; object-fit:contain;}
   .mcard .info{padding:10px 12px 4px;}
   .mcard .info b{display:block; font-size:.92rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .mcard .info span{font-size:.72rem; color:var(--muted);}
-  .mcard .btns{display:flex; gap:6px; padding:8px 12px 12px; margin-top:auto;}
+  .mcard .btns{display:flex; flex-wrap:wrap; gap:6px; padding:8px 12px 12px; margin-top:auto;}
+  .card .cover{position:relative;}
+  .pbadge{position:absolute; left:8px; bottom:8px; background:rgba(31,122,70,.94); color:#fff; font-size:.7rem; font-weight:700; padding:3px 9px; border-radius:999px; pointer-events:none;}
+  .btns button.fbbtn{background:#1877f2; color:#fff; border:1px solid #1877f2;}
+  .btns button.fbbtn:hover:not(:disabled){box-shadow:0 6px 22px rgba(24,119,242,.55);}
+  .btns button.pbtn.posted{background:#1f7a46; border-color:#2e9e5b; color:#fff;}
 
   dialog{background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:18px; width:min(420px,92vw);}
   dialog::backdrop{background:rgba(0,0,0,.68);}
@@ -312,6 +317,7 @@
   </section>
   <div class="homebar">
     <div class="chips" id="homeChips"></div>
+    <button type="button" class="secondary small" id="fbSetPage" title="ตั้งลิงก์เพจ Facebook สำหรับปุ่มโพสต์">📘 ตั้งลิงก์เพจ</button>
     <select id="homeSort" aria-label="เรียงลำดับ">
       <option value="new">ใหม่ล่าสุดก่อน</option>
       <option value="old">เก่าสุดก่อน</option>
@@ -1618,6 +1624,7 @@ async function renderLibrary(){
       el('div', {class:'btns'},
         el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}),
         el('button', {type:'button', class:'secondary small', textContent:'แก้ไขต่อ', on:{click:() => editItem(it)}}),
+        ...postButtons(it, cover, () => keepScroll(renderLibrary)),
         el('button', {type:'button', class:'danger small', textContent:'ลบ', on:{click:async () => {
           if(!confirm(`ลบ “${it.name}” ?`)) return;
           await DB.del('items', it.id); await DB.del('blobs', it.id); renderLibrary(); }}}))));
@@ -1660,9 +1667,77 @@ async function editItem(it){
 
 
 /* ================================================================
+   โพสต์ Facebook จากภาพในคลัง: คัดลอกแคปชั่น+แฮชแท็ก / เปิด Facebook / ทำเครื่องหมายโพสต์แล้ว
+================================================================ */
+function itemMovie(it){
+  const st = it.state || {}, found = MOVIES.find(m => m.id === st.movieId);
+  if(found) return found;
+  const t = ty => ((st.els || []).find(e => e.type === ty) || {}).text || '';
+  return {id:0, title:t('title') || it.name, year:null, score:t('score'), caption:t('caption'), cat:st.cat || ''};
+}
+const fbPageUrl = () => { try{ return localStorage.getItem('fbPageUrl') || ''; }catch(e){ return ''; } };
+$('#fbSetPage').addEventListener('click', () => {
+  const v = prompt('ใส่ลิงก์เพจ Facebook ของคุณ เช่น https://www.facebook.com/ชื่อเพจ\n(เว้นว่างเพื่อล้างค่า)', fbPageUrl());
+  if(v === null) return;
+  const u = v.trim();
+  if(u && !/^https?:\/\/([\w-]+\.)*(facebook|fb)\.com\//i.test(u)){ toast('ลิงก์ต้องขึ้นต้นด้วย https://www.facebook.com/…', 3500); return; }
+  try{ u ? localStorage.setItem('fbPageUrl', u) : localStorage.removeItem('fbPageUrl'); }catch(e){}
+  toast(u ? 'บันทึกลิงก์เพจแล้ว' : 'ล้างลิงก์เพจแล้ว');
+});
+async function postToFacebook(it, onChange){
+  const text = fbPost(itemMovie(it));
+  const done = async () => { try{ if(!it.posted){ await setPosted(it, true); toast('ย้ายไปโพสต์ลงเพจแล้ว ✓ (กดปุ่ม ✅ เพื่อยกเลิกได้)', 3500); } if(onChange) onChange(); }catch(e){ toast('บันทึกสถานะไม่สำเร็จ', 3500); } };
+  await copyText(text, 'คัดลอกแคปชั่น+แฮชแท็กแล้ว');
+  // มือถือ: เปิดเมนูแชร์พร้อมรูป (เลือก Facebook ได้) · คอมพิวเตอร์: เปิดหน้า Facebook ให้วางข้อความ
+  if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.canShare){
+    try{
+      const rec = await DB.get('blobs', it.id);
+      if(rec){
+        const file = new File([rec.img], `${it.name}.${extOf(it.mime)}`, {type:it.mime || rec.img.type});
+        if(navigator.canShare({files:[file]})){ await navigator.share({files:[file], text}); toast('เลือก Facebook แล้ววางแคปชั่นที่คัดลอกไว้', 4000); await done(); return; }
+      }
+    }catch(e){ if(e && e.name === 'AbortError') return; }
+  }
+  window.open(fbPageUrl() || 'https://www.facebook.com/', '_blank', 'noopener');
+  toast('คัดลอกแล้ว · วางในช่องโพสต์ และแนบรูปที่ดาวน์โหลดไว้', 4500);
+  await done();
+}
+async function setPosted(it, v){
+  const rec = await DB.get('items', it.id); if(!rec) throw new Error('missing');
+  rec.posted = v; rec.postedAt = v ? Date.now() : null;
+  await DB.put('items', rec);
+  it.posted = v; it.postedAt = rec.postedAt;
+  const h = H.items.find(x => x.id === it.id); if(h){ h.posted = v; h.postedAt = rec.postedAt; }
+}
+// ปุ่ม 3 อัน: คัดลอกแคปชั่น+แฮชแท็ก · โพสต์ไปยัง Facebook · โพสต์ลงเพจแล้ว (สลับสถานะ)
+function postButtons(it, host, onChange){
+  const paint = (btn) => {
+    btn.textContent = it.posted ? '✅ โพสต์ลงเพจแล้ว' : '⬜ โพสต์ลงเพจแล้ว';
+    btn.classList.toggle('posted', !!it.posted);
+    btn.title = it.posted ? 'กดเพื่อยกเลิกเครื่องหมาย' : 'กดเมื่อโพสต์ลงเพจเรียบร้อยแล้ว';
+    let b = host.querySelector('.pbadge');
+    if(it.posted && !b){ host.append(el('span', {class:'pbadge', textContent:'✓ โพสต์ลงเพจแล้ว'})); }
+    if(!it.posted && b) b.remove();
+  };
+  const posted = el('button', {type:'button', class:'secondary small pbtn', on:{click:async ev => {
+    const btn = ev.currentTarget; btn.disabled = true;
+    try{ await setPosted(it, !it.posted); paint(btn); toast(it.posted ? 'ทำเครื่องหมายว่าโพสต์ลงเพจแล้ว' : 'ยกเลิกเครื่องหมายแล้ว'); if(onChange) onChange(); }
+    catch(e){ toast('บันทึกสถานะไม่สำเร็จ', 3500); }
+    finally{ btn.disabled = false; }
+  }}});
+  paint(posted);
+  return [
+    el('button', {type:'button', class:'secondary small', textContent:'📋 คัดลอกแคปชั่น+แฮชแท็ก', on:{click:() => copyText(fbPost(itemMovie(it)), 'คัดลอกแคปชั่น+แฮชแท็กแล้ว')}}),
+    el('button', {type:'button', class:'small fbbtn', textContent:'📘 โพสต์ Facebook', on:{click:() => postToFacebook(it, onChange)}}),
+    posted
+  ];
+}
+function keepScroll(fn){ const y = window.scrollY; fn(); window.scrollTo(0, y); }
+
+/* ================================================================
    หน้าแรก — โชว์ผลงานทั้งหมดจากคลัง + ค้นหาชื่อหนัง
 ================================================================ */
-const H = {items:[], folders:[], q:'', folder:'all', sort:'new'};
+const H = {items:[], folders:[], q:'', folder:'all', sort:'new', post:'no'};
 async function loadHome(){
   if(DB.db){
     try{
@@ -1693,28 +1768,35 @@ function renderHome(){
       el('button', {type:'button', textContent:'สร้างโปสเตอร์แรก', on:{click:() => switchView('editor')}})));
     return;
   }
+  const nPosted = H.items.filter(i => i.posted).length;
+  const inPost = i => H.post === 'all' || (H.post === 'yes') === !!i.posted;
+  const mp = (id, label) => el('button', {type:'button', class:'chip' + (H.post === id ? ' on' : ''), textContent:label,
+    on:{click:() => { H.post = id; renderHome(); }}});
+  chips.append(mp('no', `ยังไม่ได้โพสต์ (${total - nPosted})`), mp('yes', `โพสต์ลงเพจแล้ว (${nPosted})`), mp('all', `ทั้งหมด (${total})`));
   const mk = (id, label) => el('button', {type:'button', class:'chip' + (H.folder === id ? ' on' : ''), textContent:label,
     on:{click:() => { H.folder = id; renderHome(); }}});
-  chips.append(mk('all', `ทั้งหมด (${total})`), ...H.folders.map(f => mk(f.id, `${f.name} (${H.items.filter(i => i.folderId === f.id).length})`)));
+  chips.append(el('span', {class:'hint', textContent:'|', style:'align-self:center'}),
+    mk('all', 'ทุกหมวด'), ...H.folders.map(f => mk(f.id, `${f.name} (${H.items.filter(i => i.folderId === f.id && inPost(i)).length})`)));
 
   const terms = H.q.toLowerCase().split(/\s+/).filter(Boolean);
-  const list = H.items.filter(it => (H.folder === 'all' || it.folderId === H.folder) && terms.every(t => it.hay.includes(t)));
+  const list = H.items.filter(it => (H.folder === 'all' || it.folderId === H.folder) && inPost(it) && terms.every(t => it.hay.includes(t)));
   if(H.sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name, 'th'));
   else list.sort((a, b) => H.sort === 'old' ? a.stamp - b.stamp : b.stamp - a.stamp);
   if(H.q.trim()) $('#homeSub').textContent = `พบ ${list.length} จาก ${total} รูป`;
 
-  if(!list.length){ body.append(el('div', {class:'empty', textContent:H.q.trim() ? `ไม่พบ “${H.q.trim()}”` : 'ไม่มีรูปในโฟลเดอร์นี้'})); return; }
+  if(!list.length){ body.append(el('div', {class:'empty', textContent:H.q.trim() ? `ไม่พบ “${H.q.trim()}”` : (H.post === 'yes' ? 'ยังไม่มีรูปที่โพสต์ลงเพจแล้ว' : H.post === 'no' ? 'โพสต์ครบทุกรูปแล้ว 🎉' : 'ไม่มีรูปในโฟลเดอร์นี้')})); return; }
   const wall = el('div', {class:'masonry'});
   list.forEach(it => {
     const date = new Date(it.stamp).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
-    wall.append(el('article', {class:'mcard'},
-      el('div', {class:'pic', tabIndex:0, role:'button', 'aria-label':`ดูภาพ ${it.name}`,
+    const pic = el('div', {class:'pic', tabIndex:0, role:'button', 'aria-label':`ดูภาพ ${it.name}`,
         on:{click:() => previewItem(it), keydown:ev => { if(ev.key === 'Enter') previewItem(it); }}},
-        el('img', {src:it.thumb, alt:it.name, loading:'lazy'})),
+        el('img', {src:it.thumb, alt:it.name, loading:'lazy'}));
+    wall.append(el('article', {class:'mcard'}, pic,
       el('div', {class:'info'}, el('b', {textContent:it.name}), el('span', {textContent:`${it.folderName ? it.folderName + ' · ' : ''}${date}`})),
       el('div', {class:'btns'},
         el('button', {type:'button', class:'small', textContent:'แก้ไข', on:{click:() => editItem(it)}}),
-        el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}))));
+        el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}),
+        ...postButtons(it, pic, () => keepScroll(renderHome)))));
   });
   body.append(wall);
 }
