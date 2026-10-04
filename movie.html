@@ -1699,8 +1699,9 @@ async function postToFacebook(it, onChange){
       }
     }catch(e){ if(e && e.name === 'AbortError') return; }
   }
+  try{ await dlItem(it); }catch(e){ toast('ดาวน์โหลดรูปไม่สำเร็จ · กดปุ่มดาวน์โหลดเอง', 3500); }
   window.open(fbPageUrl() || BIZ_COMPOSER, '_blank', 'noopener');
-  toast('คัดลอกแล้ว · เปิด Meta Business Suite แล้ว วางข้อความ แนบรูป แล้วตั้งเวลาโพสต์', 5000);
+  toast('คัดลอกข้อความ + โหลดรูปแล้ว · วางแคปชั่น เลือกรูปที่โหลดไว้ แล้วตั้งเวลาใน Business Suite', 5500);
   await done();
 }
 async function setPosted(it, v){
@@ -1729,7 +1730,7 @@ function postButtons(it, host, onChange){
   paint(posted);
   return [
     el('button', {type:'button', class:'secondary small', textContent:'📋 คัดลอกแคปชั่น+แฮชแท็ก', on:{click:() => copyText(fbPost(itemMovie(it)), 'คัดลอกแคปชั่น+แฮชแท็กแล้ว')}}),
-    el('button', {type:'button', class:'small fbbtn', textContent:'📘 โพสต์ Facebook', on:{click:() => postToFacebook(it, onChange)}}),
+    el('button', {type:'button', class:'small fbbtn', textContent:'📘 โพสต์ Facebook', title:'คัดลอกแคปชั่น + โหลดรูป + เปิด Business Suite', on:{click:() => postToFacebook(it, onChange)}}),
     posted
   ];
 }
