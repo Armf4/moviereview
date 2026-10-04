@@ -1,5 +1,6 @@
 // เก็บ/อ่าน/ลบ ข้อมูล (โฟลเดอร์ รายการ ฯลฯ) เป็นไฟล์ JSON ใน Vercel Blob
-// ต้องตั้ง Environment Variable APP_KEY ใน Vercel ไม่งั้นทุกคำขอจะถูกปฏิเสธ (401)
+// รหัสผ่านเป็นแบบเลือกได้: ถ้าไม่ตั้ง APP_KEY ใน Vercel = ใช้งานได้เลยโดยไม่ต้องใส่รหัส
+// ถ้าตั้ง APP_KEY ไว้ คำขอที่ไม่มีรหัสตรงกันจะถูกปฏิเสธ (401)
 import { put, list, del } from '@vercel/blob';
 
 const STORES = new Set(['folders', 'items', 'blobs', 'meta']);
@@ -66,7 +67,7 @@ const ownFile = (u) => {
 export default async function handler(req, res) {
   try {
     const key = process.env.APP_KEY;
-    if (!key || req.headers['x-app-key'] !== key) return res.status(401).json({ error: 'unauthorized' });
+    if (key && req.headers['x-app-key'] !== key) return res.status(401).json({ error: 'unauthorized' });
 
     const q = req.query || {};
     if (q.ping) return res.status(200).json({ ok: true });

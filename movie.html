@@ -1562,15 +1562,16 @@ async function makeZip(files){
    โครงสร้างแยก "ข้อมูลเบา" (folders/items) ออกจากไฟล์ภาพ (blobs)
    ถ้าจะย้ายไปเก็บบนเซิร์ฟเวอร์ภายหลัง แก้เฉพาะออบเจ็กต์ DB นี้
 ================================================================ */
-/* ---- รหัสผ่านแอป (ต้องตรงกับ APP_KEY ใน Vercel) ---- */
+/* ---- รหัสผ่านแอป (เลือกได้) : ถ้าเซิร์ฟเวอร์ไม่ได้ตั้ง APP_KEY จะไม่ถามรหัสเลย
+        ถ้าตั้งไว้และเซิร์ฟเวอร์ตอบ 401 ค่อยถามรหัส 1 ครั้ง ---- */
 let _ak = null;
-function appKey(){
+function appKey(ask){
   if(_ak) return _ak;
   let k = null;
   try{ k = localStorage.getItem('appKey'); }catch(e){}
-  if(!k) k = prompt('ใส่รหัสผ่านแอป (APP_KEY)') || '';
+  if(!k && ask) k = prompt('ใส่รหัสผ่านแอป (APP_KEY)') || '';
   if(k){ _ak = k; try{ localStorage.setItem('appKey', k); }catch(e){} }
-  return k;
+  return k || '';
 }
 const DB = {
   db: null,
@@ -1579,7 +1580,7 @@ const DB = {
   async api(method, qs, body, retried){
     const r = await fetch('/api/kv?' + qs, {
       method,
-      headers: {'x-app-key': appKey(), ...(body ? {'Content-Type':'application/json'} : {})},
+      headers: {'x-app-key': appKey(retried), ...(body ? {'Content-Type':'application/json'} : {})},
       body: body ? JSON.stringify(body) : undefined
     });
     if(r.status === 401){

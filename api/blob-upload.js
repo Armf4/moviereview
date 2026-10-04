@@ -1,5 +1,5 @@
 // ออก token ให้เบราว์เซอร์อัพโหลดรูปตรงเข้า Vercel Blob (รองรับไฟล์ใหญ่กว่า 4.5MB)
-// ต้องตั้ง Environment Variable APP_KEY ใน Vercel (หน้าเว็บส่งมาทาง clientPayload)
+// รหัสผ่านเป็นแบบเลือกได้: ถ้าไม่ตั้ง APP_KEY ใน Vercel = ไม่ตรวจรหัส
 import { handleUpload } from '@vercel/blob/client';
 
 export default async function handler(req, res) {
@@ -9,7 +9,7 @@ export default async function handler(req, res) {
       request: req,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
         const key = process.env.APP_KEY;
-        if (!key || clientPayload !== key) throw new Error('unauthorized');
+        if (key && clientPayload !== key) throw new Error('unauthorized');
         if (!pathname.startsWith('files/')) throw new Error('invalid path');
         return {
           allowedContentTypes: ['image/*'],
