@@ -776,6 +776,16 @@ function movieBlock(p){
   d.append(el('div', {class:'hint', textContent: p.movie
     ? `${p.movie.cat} · ${p.movie.score} (ดึงจากชื่อไฟล์อัตโนมัติ)`
     : 'ไม่พบชื่อหนังนี้ในรายการจากชื่อไฟล์ — พิมพ์ค้นหาเพื่อเลือกเอง'}));
+  if(p.movie){
+    d.append(el('div', {class:'row'}, el('button', {type:'button', class:'secondary small', textContent:'📋 คัดลอกชื่อหนัง', title:p.movie.title, on:{click:async () => {
+      const t = p.movie.title;
+      try{
+        if(navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(t);
+        else { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); if(!ok) throw 0; }
+        toast(`คัดลอก “${t}” แล้ว`);
+      }catch(e){ toast('คัดลอกไม่สำเร็จ'); }
+    }}})));
+  }
   const inp = el('input', {type:'text', placeholder:'พิมพ์ชื่อหนังเพื่อค้นหา…', autocomplete:'off'});
   inp.setAttribute('list', 'movieList');
   inp.addEventListener('change', () => { const m = findMovieByText(inp.value); if(m) applyMovie(p, m); });
