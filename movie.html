@@ -1562,14 +1562,30 @@ async function makeZip(files){
    โครงสร้างแยก "ข้อมูลเบา" (folders/items) ออกจากไฟล์ภาพ (blobs)
    ถ้าจะย้ายไปเก็บบนเซิร์ฟเวอร์ภายหลัง แก้เฉพาะออบเจ็กต์ DB นี้
 ================================================================ */
+/* ---- รหัสผ่านแอป (ต้องตรงกับ APP_KEY ใน Vercel) ---- */
+let _ak = null;
+function appKey(){
+  if(_ak) return _ak;
+  let k = null;
+  try{ k = localStorage.getItem('appKey'); }catch(e){}
+  if(!k) k = prompt('ใส่รหัสผ่านแอป (APP_KEY)') || '';
+  if(k){ _ak = k; try{ localStorage.setItem('appKey', k); }catch(e){} }
+  return k;
+}
 const DB = {
   db: null,
-  async api(method, qs, body){
+  _c: {},   // แคชของ folders / items / meta (โหลดจากเซิร์ฟเวอร์ครั้งเดียวต่อการเปิดหน้า)
+  _p: {},
+  async api(method, qs, body, retried){
     const r = await fetch('/api/kv?' + qs, {
       method,
-      headers: body ? {'Content-Type':'application/json'} : undefined,
+      headers: {'x-app-key': appKey(), ...(body ? {'Content-Type':'application/json'} : {})},
       body: body ? JSON.stringify(body) : undefined
     });
+    if(r.status === 401){
+      _ak = null; try{ localStorage.removeItem('appKey'); }catch(e){}
+      if(!retried) return this.api(method, qs, body, true);   // ถามรหัสใหม่ 1 ครั้ง
+    }
     if(!r.ok) throw new Error('api ' + r.status);
     return r.json();
   },
@@ -1590,10 +1606,21 @@ const DB = {
     return out;
   },
   async all(s){
-    const rows = await this.api('GET', 'store=' + s);
-    return Promise.all(rows.map(d => this.hydrate(d)));
+    if(!this._c[s]){
+      if(!this._p[s]) this._p[s] = (async () => {
+        const rows = await this.api('GET', 'store=' + s);
+        this._c[s] = await Promise.all(rows.map(d => this.hydrate(d)));
+      })().finally(() => { delete this._p[s]; });
+      await this._p[s];
+    }
+    return [...this._c[s]];
   },
   async get(s, k){
+    if(s !== 'blobs'){      // ข้อมูลเบาอ่านจากแคช ไม่ต้องยิงเซิร์ฟเวอร์ซ้ำ
+      const key = String(k);
+      const row = (await this.all(s)).find(r => String(this.keyOf(s, r)) === key);
+      return row ? {...row} : undefined;
+    }
     const d = await this.api('GET', `store=${s}&k=${encodeURIComponent(k)}`);
     return d ? this.hydrate(d) : undefined;
   },
@@ -1603,16 +1630,21 @@ const DB = {
     for(const f of Object.keys(data)){
       if(data[f] instanceof Blob){
         const res = await upload(`files/${s}/${k.replace(/[^\w-]/g, '_')}/${f}`, data[f], {
-          access:'public', handleUploadUrl:'/api/blob-upload',
+          access:'public', handleUploadUrl:'/api/blob-upload', clientPayload: appKey(),
           contentType:data[f].type || 'image/png', multipart:data[f].size > 5e6
         });
         data[f] = {__blob:res.url, type:data[f].type, v:now};
       } else if(data[f] === undefined) delete data[f];
     }
     await this.api('PUT', 'store=' + s, {k, data});
+    if(this._c[s]){         // อัปเดตแคชให้ตรงกับที่เพิ่งบันทึก
+      const row = {...v}, i = this._c[s].findIndex(r => String(this.keyOf(s, r)) === k);
+      if(i < 0) this._c[s].push(row); else this._c[s][i] = row;
+    }
   },
   async del(s, k){
     await this.api('DELETE', `store=${s}&k=${encodeURIComponent(k)}`);
+    if(this._c[s]) this._c[s] = this._c[s].filter(r => String(this.keyOf(s, r)) !== String(k));
   }
 };
 
@@ -1810,20 +1842,25 @@ const fbPageUrl = () => { try{ return localStorage.getItem('fbPageUrl') || ''; }
 async function postToFacebook(it, onChange){
   const text = fbPost(itemMovie(it));
   const done = async () => { try{ if(SET.fbMark && !it.posted){ await setPosted(it, true); toast('ย้ายไปโพสต์ลงเพจแล้ว ✓ (กดปุ่ม ✅ เพื่อยกเลิกได้)', 3500); } if(onChange) onChange(); }catch(e){ toast('บันทึกสถานะไม่สำเร็จ', 3500); } };
-  if(SET.fbCopy) await copyText(text, 'คัดลอกแคปชั่น+แฮชแท็กแล้ว');
-  // มือถือ: เปิดเมนูแชร์พร้อมรูป (เลือก Facebook ได้) · คอมพิวเตอร์: เปิดหน้า Facebook ให้วางข้อความ
-  if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.canShare){
+  // เริ่มดึงรูปจากคลังไว้ก่อน (ทำขนานกับการคัดลอก) จะได้ทุกอย่างเสร็จในจังหวะที่ผู้ใช้เพิ่งกดปุ่ม
+  const recP = SET.fbDownload ? DB.get('blobs', it.id).catch(() => null) : null;
+  // 1) คัดลอกแคปชั่น + แฮชแท็ก
+  const copied = SET.fbCopy ? await copyText(text, 'คัดลอกแคปชั่น+แฮชแท็กแล้ว') : false;
+  // 2) โหลดรูปลงเครื่อง (ทุกอุปกรณ์ รวมมือถือ)
+  let saved = false;
+  if(recP){
     try{
-      const rec = await DB.get('blobs', it.id);
-      if(rec){
-        const file = new File([rec.img], `${it.name}.${extOf(it.mime)}`, {type:it.mime || rec.img.type});
-        if(navigator.canShare({files:[file]})){ await navigator.share({files:[file], text}); toast('เลือก Facebook แล้ววางแคปชั่นที่คัดลอกไว้', 4000); await done(); return; }
-      }
-    }catch(e){ if(e && e.name === 'AbortError') return; }
+      const rec = await recP;
+      if(rec && rec.img){ saveAs(rec.img, `${it.name}.${extOf(it.mime)}`); saved = true; }
+    }catch(e){}
   }
-  if(SET.fbDownload) try{ await dlItem(it); }catch(e){ toast('ดาวน์โหลดรูปไม่สำเร็จ · กดปุ่มดาวน์โหลดเอง', 3500); }
-  window.open(fbPageUrl() || BIZ_COMPOSER, '_blank', 'noopener');
-  toast('เปิด Business Suite แล้ว' + (SET.fbCopy ? ' · คัดลอกข้อความแล้ว' : '') + (SET.fbDownload ? ' · โหลดรูปแล้ว' : '') + ' · ตั้งเวลาโพสต์ได้เลย', 5500);
+  // 3) เปิด Business Suite
+  const w = window.open(fbPageUrl() || BIZ_COMPOSER, '_blank', 'noopener');
+  const msg = [];
+  if(SET.fbCopy) msg.push(copied ? 'คัดลอกข้อความแล้ว' : '⚠ คัดลอกข้อความไม่สำเร็จ');
+  if(SET.fbDownload) msg.push(saved ? 'โหลดรูปแล้ว' : '⚠ โหลดรูปไม่สำเร็จ (กดปุ่มดาวน์โหลดเอง)');
+  msg.push(w ? 'ตั้งเวลาโพสต์ได้เลย' : '⚠ เบราว์เซอร์บล็อกหน้าใหม่ · เปิด business.facebook.com เอง');
+  toast(msg.join(' · '), 5500);
   await done();
 }
 async function setPosted(it, v){
@@ -2029,9 +2066,16 @@ function plannerLoad(){
   if(!Array.isArray(PLANNER.times)||!PLANNER.times.length) PLANNER.times=PLANNER_DEF.times.slice();
   if(!Array.isArray(PLANNER.entries)) PLANNER.entries=[];
 }
+let _plT = null;
+function plannerRemoteFlush(){
+  if(!_plT) return;
+  clearTimeout(_plT); _plT = null;
+  if(DB.db) DB.put('meta',{k:'facebook_planner', ...PLANNER}).catch(e => console.warn('planner blob save',e));
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') plannerRemoteFlush(); });
 async function plannerSave(){
   try{ localStorage.setItem(PLANNER_KEY, JSON.stringify(PLANNER)); }catch(e){}
-  if(DB.db){ try{ await DB.put('meta',{k:'facebook_planner', ...PLANNER}); }catch(e){ console.warn('planner blob save',e); } }
+  if(DB.db){ clearTimeout(_plT); _plT = setTimeout(plannerRemoteFlush, 2000); }   // รอ 2 วินาทีหลังแก้ล่าสุดค่อยเขียน Blob
 }
 async function plannerLoadRemote(){
   if(!DB.db) return;
@@ -2423,7 +2467,8 @@ async function copyText(t, okMsg){
     if(navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(t);
     else { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); if(!ok) throw 0; }
     toast(okMsg);
-  }catch(e){ toast('คัดลอกไม่สำเร็จ'); }
+    return true;
+  }catch(e){ toast('คัดลอกไม่สำเร็จ'); return false; }
 }
 
 /* ================================================================
