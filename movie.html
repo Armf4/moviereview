@@ -173,6 +173,8 @@
   .thumb .tag.warn{background:#6b2226; color:#fff;}
   details.mv{border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--panel2);}
   details.mv summary{cursor:pointer; font-weight:600; font-size:.85rem; color:var(--accent2);}
+  details.mv summary .mv-t{overflow-wrap:anywhere;}
+  details.mv summary .mv-copy{float:right; margin-left:8px; white-space:nowrap;}
   details.mv > :not(summary){margin-top:8px;}
   .toolbar .opts{display:flex; flex-direction:column; gap:4px; flex:1 1 220px; min-width:200px;}
 
@@ -772,20 +774,23 @@ const catFolderName = p => p.cat || UNSORTED;
 // กล่อง "ข้อมูลหนัง" ในแผงปรับแต่ง — ใช้เลือกหนังเองเมื่อจับคู่อัตโนมัติไม่เจอ / เปลี่ยนประเภท / จัดเลย์เอาต์ใหม่
 function movieBlock(p){
   const d = el('details', {class:'mv', open:!p.movie});
-  d.append(el('summary', {textContent: p.movie ? `ข้อมูลหนัง · ${p.movie.title}` : 'ข้อมูลหนัง · ยังไม่พบ (เลือกเอง)'}));
-  d.append(el('div', {class:'hint', textContent: p.movie
-    ? `${p.movie.cat} · ${p.movie.score} (ดึงจากชื่อไฟล์อัตโนมัติ)`
-    : 'ไม่พบชื่อหนังนี้ในรายการจากชื่อไฟล์ — พิมพ์ค้นหาเพื่อเลือกเอง'}));
+  const sm = el('summary', {});
+  sm.append(el('span', {class:'mv-t', textContent: p.movie ? `ข้อมูลหนัง · ${p.movie.title}` : 'ข้อมูลหนัง · ยังไม่พบ (เลือกเอง)'}));
   if(p.movie){
-    d.append(el('div', {class:'row'}, el('button', {type:'button', class:'secondary small', textContent:'📋 คัดลอกชื่อหนัง', title:p.movie.title, on:{click:async () => {
+    sm.append(el('button', {type:'button', class:'secondary small mv-copy', textContent:'📋 คัดลอก', title:`คัดลอกชื่อ “${p.movie.title}”`, on:{click:async ev => {
+      ev.preventDefault(); ev.stopPropagation();
       const t = p.movie.title;
       try{
         if(navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(t);
         else { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); if(!ok) throw 0; }
         toast(`คัดลอก “${t}” แล้ว`);
       }catch(e){ toast('คัดลอกไม่สำเร็จ'); }
-    }}})));
+    }}}));
   }
+  d.append(sm);
+  d.append(el('div', {class:'hint', textContent: p.movie
+    ? `${p.movie.cat} · ${p.movie.score} (ดึงจากชื่อไฟล์อัตโนมัติ)`
+    : 'ไม่พบชื่อหนังนี้ในรายการจากชื่อไฟล์ — พิมพ์ค้นหาเพื่อเลือกเอง'}));
   const inp = el('input', {type:'text', placeholder:'พิมพ์ชื่อหนังเพื่อค้นหา…', autocomplete:'off'});
   inp.setAttribute('list', 'movieList');
   inp.addEventListener('change', () => { const m = findMovieByText(inp.value); if(m) applyMovie(p, m); });
