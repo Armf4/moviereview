@@ -159,6 +159,14 @@
   dialog::backdrop{background:rgba(0,0,0,.68);}
   dialog form{display:flex; flex-direction:column; gap:12px;}
   dialog#viewDlg{width:min(560px,94vw);}
+  dialog#impDlg{width:min(520px,94vw); max-height:90vh; overflow:auto;}
+  #impDlg h3{font-size:1.05rem; margin:0;}
+  #impDlg ul{margin:6px 0 0 18px; padding:0; font-size:.82rem; color:var(--muted); line-height:1.7;}
+  #impDlg .sum{font-size:.88rem; line-height:1.8;}
+  #impDlg .sum b{color:var(--accent2);}
+  #impDlg .sample{font-size:.78rem; color:var(--muted); background:#150e0d; border:1px solid var(--line); border-radius:8px; padding:8px 10px; line-height:1.6; max-height:150px; overflow:auto;}
+  #impDlg .warn{color:#ffb74d;}
+  .mvtools{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
   dialog#viewDlg img{width:100%; height:auto; max-height:78vh; object-fit:contain; border-radius:8px; background:#000;}
   .opt{display:flex; gap:8px; align-items:center; font-size:.88rem; color:var(--text); margin:0;}
 
@@ -371,6 +379,7 @@
       <div class="hint" id="mvSub"></div>
     </div>
     <div class="search"><input type="search" id="mvQ" placeholder="ค้นหาชื่อหนัง / แคปชั่น…" aria-label="ค้นหาหนัง" autocomplete="off"></div>
+    <div class="mvtools"><button type="button" class="secondary" id="mvImport">📥 นำเข้า Excel</button></div>
   </section>
   <div class="prog" aria-hidden="true"><i id="mvBar"></i></div>
   <div class="homebar">
@@ -409,6 +418,37 @@
   </form>
 </dialog>
 
+<dialog id="impDlg">
+  <form method="dialog" onsubmit="return false">
+    <h3>นำเข้ารายการหนังจาก Excel / CSV</h3>
+    <div id="impInfo">
+      <div class="hint">เลือกไฟล์ .xlsx หรือ .csv (ใช้ชีตแรก · แถวแรกเป็นหัวตาราง) โปรแกรมจะดูตัวอย่างให้ก่อนนำเข้าจริง</div>
+      <ul>
+        <li><b>ชื่อหนัง</b> (จำเป็น) — ชื่อภาษาอังกฤษ ใช้ค้นหาปกและจับคู่ชื่อไฟล์</li>
+        <li><b>ปี</b> — ช่วยให้ค้นปกตรงเรื่อง</li>
+        <li><b>หมวด</b> — ถ้าเป็นหมวดใหม่ จะสร้างหมวดและสีให้เอง</li>
+        <li><b>คะแนน</b> — เช่น 9.4 หรือ 9.4/10</li>
+        <li><b>แคปชั่น</b> — ข้อความใต้คะแนนบนโปสเตอร์</li>
+        <li><b>ชื่ออื่น</b> — ชื่อไทย/ชื่อย่อ คั่นด้วย , (ใช้จับคู่กับชื่อไฟล์รูป)</li>
+      </ul>
+      <div class="hint" style="margin-top:8px">หัวตารางภาษาไทยหรืออังกฤษก็ได้ (title, year, cat/genre, score/rating, caption, alias) · ไฟล์ .xls เก่าให้บันทึกเป็น .xlsx ก่อน</div>
+    </div>
+    <div id="impPrev" hidden>
+      <div class="sum" id="impSum"></div>
+      <div class="sample" id="impSample"></div>
+    </div>
+    <div class="row">
+      <button type="button" class="secondary small" id="impTpl">⬇ แม่แบบ (CSV)</button>
+      <button type="button" class="danger small" id="impClear" hidden>ลบที่นำเข้าทั้งหมด</button>
+    </div>
+    <div class="row end">
+      <button type="button" class="secondary" id="impCancel">ปิด</button>
+      <button type="button" class="secondary" id="impPick">เลือกไฟล์…</button>
+      <button type="button" id="impOk" hidden>นำเข้า</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="viewDlg">
   <form method="dialog">
     <img id="viewImg" alt="ตัวอย่างภาพ">
@@ -422,6 +462,7 @@
 <input type="file" id="logoInput" accept="image/*" hidden>
 <input type="file" id="replaceInput" accept="image/*" hidden>
 <input type="file" id="movieFileInput" accept="image/*" hidden>
+<input type="file" id="impFile" accept=".xlsx,.csv,.tsv,.txt,text/csv" hidden>
 
 <script>
 'use strict';
@@ -650,7 +691,7 @@ function normStr(s, stripYears){
   let t = String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/&/g, ' and ').replace(/['’`]/g, '');
   if(stripYears) t = t.replace(/\b(19|20)\d{2}\b/g, ' ');
-  return t.replace(/[^a-z0-9]+/g, ' ').trim();
+  return t.replace(/[^a-z0-9\u0E00-\u0E7F]+/g, ' ').trim();
 }
 function toks(s, stripYears){
   const t = normStr(s, stripYears).split(' ').filter(Boolean);
@@ -1884,12 +1925,247 @@ $('#movieFileInput').addEventListener('change', async e => {
   }catch(err){ toast('บันทึกรูปปกไม่สำเร็จ'); }
 });
 
+
+/* ================================================================
+   นำเข้ารายการหนังจาก Excel (.xlsx) / CSV
+================================================================ */
+const EXTRA = {list:[], cats:{}};
+const CAT_PALETTE = ['#8e24aa', '#00897b', '#6d4c41', '#c0ca33', '#5e35b1', '#d81b60', '#00acc1', '#fb8c00', '#546e7a', '#7cb342'];
+function registerMovie(m){
+  if(m.alias && m.alias.length) MOVIE_ALIASES[m.id] = m.alias;
+  m.label = `${m.title}${m.year ? ' (' + m.year + ')' : ''} — ${m.cat}`;
+  m.names = [m.title, ...(MOVIE_ALIASES[m.id] || [])].map(n => toks(n, false));
+}
+function refreshMovieUI(){
+  $('#movieList').replaceChildren(...MOVIES.map(m => el('option', {value:m.label})));
+  try{ renderMovies(); }catch(e){}
+}
+async function saveExtra(){
+  const rec = {k:'movies_extra', list:EXTRA.list, cats:EXTRA.cats};
+  if(DB.db) await DB.put('meta', rec);
+  else localStorage.setItem('movies_extra', JSON.stringify(rec));
+}
+function applyExtra(rec){
+  (rec.list || []).forEach(m => {
+    if(MOVIES.some(x => x.id === m.id)) return;
+    if(m.cat && !CATS.includes(m.cat)){ CATS.push(m.cat); CAT_COLOR[m.cat] = (rec.cats || {})[m.cat] || CAT_PALETTE[CATS.length % CAT_PALETTE.length]; }
+    registerMovie(m); MOVIES.push(m); EXTRA.list.push(m);
+  });
+  Object.assign(EXTRA.cats, rec.cats || {});
+}
+async function loadExtraMovies(){
+  try{
+    let rec = null;
+    if(DB.db){ const r = await DB.get('meta', 'movies_extra'); rec = r || null; }
+    if(!rec){ try{ rec = JSON.parse(localStorage.getItem('movies_extra') || 'null'); }catch(e){} }
+    if(rec) applyExtra(rec);
+  }catch(e){}
+  refreshMovieUI();
+}
+
+/* --- อ่านไฟล์ .xlsx โดยไม่พึ่งไลบรารี (zip + XML) --- */
+async function zipOpen(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let e = u8.length - 22; while(e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if(e < 0) throw new Error('zip');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+  const files = {}, td = new TextDecoder();
+  for(let i = 0; i < n; i++){
+    if(dv.getUint32(p, true) !== 0x02014b50) break;
+    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    files[td.decode(u8.subarray(p + 46, p + 46 + nl))] = {method:dv.getUint16(p + 10, true), csz:dv.getUint32(p + 20, true), off:dv.getUint32(p + 42, true)};
+    p += 46 + nl + xl + cl;
+  }
+  const read = async name => {
+    const f = files[name]; if(!f) return null;
+    const nl = dv.getUint16(f.off + 26, true), xl = dv.getUint16(f.off + 28, true), st = f.off + 30 + nl + xl;
+    const data = u8.subarray(st, st + f.csz);
+    if(f.method === 0) return td.decode(data);
+    const out = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+    return td.decode(out);
+  };
+  return {files, read};
+}
+async function readXlsx(buf){
+  const z = await zipOpen(buf), dom = t => new DOMParser().parseFromString(t, 'application/xml');
+  const txt = n => [...n.getElementsByTagName('t')].filter(t => t.parentNode.nodeName !== 'rPh').map(t => t.textContent).join('');
+  let sheet = 'xl/worksheets/sheet1.xml';
+  const wbx = await z.read('xl/workbook.xml'), relx = await z.read('xl/_rels/workbook.xml.rels');
+  if(wbx && relx){
+    const sh = dom(wbx).getElementsByTagName('sheet')[0];
+    const rid = sh && (sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id'));
+    for(const r of dom(relx).getElementsByTagName('Relationship'))
+      if(rid && r.getAttribute('Id') === rid) sheet = 'xl/' + r.getAttribute('Target').replace(/^\/?(xl\/)?/, '');
+  }
+  const sx = await z.read(sheet); if(!sx) throw new Error('nosheet');
+  const sst = []; const ssx = await z.read('xl/sharedStrings.xml');
+  if(ssx) for(const si of dom(ssx).getElementsByTagName('si')) sst.push(txt(si));
+  const colNo = ref => { let n = 0; for(const ch of ref.replace(/[0-9]/g, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  const rows = [];
+  for(const row of dom(sx).getElementsByTagName('row')){
+    const r = [];
+    for(const c of row.getElementsByTagName('c')){
+      const t = c.getAttribute('t'), vEl = c.getElementsByTagName('v')[0], v = vEl ? vEl.textContent : '';
+      let val = '';
+      if(t === 's') val = sst[+v] || '';
+      else if(t === 'inlineStr') val = txt(c);
+      else if(t === 'str' || t === 'e') val = v;
+      else if(t === 'b') val = v === '1' ? 'TRUE' : 'FALSE';
+      else val = v === '' ? '' : Number(v);
+      r[colNo(c.getAttribute('r') || 'A1')] = val;
+    }
+    rows.push(Array.from(r, x => x === undefined ? '' : x));
+  }
+  return rows;
+}
+function readCsv(text){
+  text = text.replace(/^\uFEFF/, '');
+  const f = text.split(/\r?\n/)[0] || '';
+  const cnt = ch => f.split(ch).length;
+  const d = cnt('\t') > cnt(',') ? '\t' : (cnt(';') > cnt(',') ? ';' : ',');
+  const rows = []; let row = [], cell = '', q = false;
+  for(let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if(q){ if(ch === '"'){ if(text[i + 1] === '"'){ cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if(ch === '"') q = true;
+    else if(ch === d){ row.push(cell); cell = ''; }
+    else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if(cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows;
+}
+
+/* --- แปลงตารางเป็นรายการหนัง --- */
+const IMP_FIELDS = [
+  ['alias',   ['alias', 'ชื่ออื่น', 'ชื่อไทย', 'ชื่อเรียก', 'thai']],
+  ['year',    ['year', 'ปี']],
+  ['score',   ['score', 'rating', 'คะแนน', 'เรท']],
+  ['caption', ['caption', 'แคปชั่น', 'คำโปรย', 'คำบรรยาย', 'tagline']],
+  ['cat',     ['cat', 'genre', 'หมวด', 'ประเภท', 'แนว']],
+  ['title',   ['title', 'name', 'ชื่อ', 'movie', 'หนัง', 'เรื่อง']]
+];
+function normScore(v){
+  if(v === '' || v == null) return '';
+  const s = String(v).trim(); if(!s) return '';
+  if(s.includes('/')) return s.replace(/\s+/g, '');
+  const pct = s.endsWith('%'), n = parseFloat(s.replace('%', ''));
+  if(!isFinite(n)) return s;
+  const x = Math.round((pct || n > 10 ? n / 10 : n) * 10) / 10;
+  return x + '/10';
+}
+const cell2s = v => v == null ? '' : String(v).trim();
+const dupKey = (t, y) => (normStr(t) || String(t).trim().toLowerCase()) + '|' + (y || '');
+function parseMovieRows(rows){
+  rows = rows.filter(r => r.some(c => cell2s(c) !== ''));
+  if(!rows.length) return {items:[], dup:0, skipped:0, newCats:[], noScore:0, noCap:0, total:0};
+  const map = {}, head = rows[0].map(h => cell2s(h).toLowerCase());
+  head.forEach((h, i) => {
+    if(!h) return;
+    for(const [f, keys] of IMP_FIELDS){ if(!(f in map) && keys.some(k => h.includes(k))){ map[f] = i; break; } }
+  });
+  let data = rows.slice(1);
+  if(!('title' in map)){ ['title', 'year', 'score', 'caption', 'cat', 'alias'].forEach((f, i) => map[f] = i); data = rows; }
+  const seen = new Set(MOVIES.map(m => dupKey(m.title, m.year)));
+  const items = [], newCats = []; let dup = 0, skipped = 0, noScore = 0, noCap = 0, nid = Math.max(1000, ...MOVIES.map(m => m.id)) + 1;
+  const catKey = c => c.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+  for(const r of data){
+    const g = f => f in map ? r[map[f]] : '';
+    const title = cell2s(g('title'));
+    if(!title){ skipped++; continue; }
+    const ym = cell2s(g('year')).match(/(19|20)\d{2}/), year = ym ? +ym[0] : null;
+    const k = dupKey(title, year);
+    if(seen.has(k)){ dup++; continue; }
+    seen.add(k);
+    let cat = cell2s(g('cat')) || 'Other';
+    const known = [...CATS, ...newCats].find(c => catKey(c) === catKey(cat));
+    if(known) cat = known; else newCats.push(cat);
+    const score = normScore(g('score')), caption = cell2s(g('caption'));
+    if(!score) noScore++; if(!caption) noCap++;
+    const alias = cell2s(g('alias')).split(/[,;|\n]+/).map(x => x.trim()).filter(Boolean);
+    items.push({id:nid++, cat, title, year, score, caption, alias});
+  }
+  return {items, dup, skipped, newCats, noScore, noCap, total:data.length};
+}
+
+/* --- หน้าต่างนำเข้า --- */
+const impDlg = $('#impDlg');
+let IMP = null;
+function impReset(){
+  IMP = null; $('#impInfo').hidden = false; $('#impPrev').hidden = true; $('#impOk').hidden = true;
+  $('#impClear').hidden = !EXTRA.list.length; $('#impClear').textContent = `ลบที่นำเข้าทั้งหมด (${EXTRA.list.length})`;
+}
+$('#mvImport').addEventListener('click', () => { impReset(); impDlg.showModal(); });
+$('#impCancel').addEventListener('click', () => impDlg.close());
+$('#impPick').addEventListener('click', () => { $('#impFile').value = ''; $('#impFile').click(); });
+$('#impTpl').addEventListener('click', () => {
+  const csv = '\uFEFFชื่อหนัง (Title),ปี,หมวด,คะแนน,แคปชั่น,ชื่ออื่น\r\n' +
+    'Bad Genius,2017,Thriller,9.0/10,"ความฉลาดคืออาวุธ แต่ก็เป็นกับดักได้เหมือนกัน","ฉลาดเกมส์โกง"\r\n';
+  saveAs(new Blob([csv], {type:'text/csv;charset=utf-8'}), 'movie-template.csv');
+});
+$('#impFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const buf = await f.arrayBuffer();
+    const isZip = new Uint8Array(buf.slice(0, 2)).join() === '80,75';
+    if(!isZip && /\.xls$/i.test(f.name)){ toast('ไฟล์ .xls เก่าอ่านไม่ได้ · ให้บันทึกเป็น .xlsx แล้วลองใหม่', 4500); return; }
+    const rows = isZip ? await readXlsx(buf) : readCsv(new TextDecoder('utf-8').decode(buf));
+    IMP = parseMovieRows(rows);
+    showImpPreview(f.name);
+  }catch(err){ console.error(err); toast('อ่านไฟล์ไม่สำเร็จ · ลองบันทึกเป็น .xlsx หรือ .csv (UTF-8) อีกครั้ง', 4500); }
+});
+function showImpPreview(fname){
+  const r = IMP, sum = $('#impSum'), sm = $('#impSample');
+  sum.replaceChildren(); sm.replaceChildren();
+  const line = (html, cls) => { const d = document.createElement('div'); if(cls) d.className = cls; d.innerHTML = html; sum.append(d); };
+  const esc = t => String(t).replace(/[&<>]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;'}[c]));
+  line(`ไฟล์ ${esc(fname)} · ${r.total} แถว`);
+  line(`พร้อมนำเข้า <b>${r.items.length}</b> เรื่อง`);
+  if(r.dup) line(`ซ้ำกับที่มีอยู่แล้ว (ข้าม) ${r.dup} เรื่อง`);
+  if(r.skipped) line(`ไม่มีชื่อหนัง (ข้าม) ${r.skipped} แถว`, 'warn');
+  if(r.newCats.length) line(`หมวดใหม่ที่จะสร้าง: <b>${r.newCats.map(esc).join(', ')}</b>`);
+  if(r.noScore) line(`ไม่มีคะแนน ${r.noScore} เรื่อง (ใส่ทีหลังได้ในหน้าแก้ไข)`, 'warn');
+  if(r.noCap) line(`ไม่มีแคปชั่น ${r.noCap} เรื่อง`, 'warn');
+  r.items.slice(0, 8).forEach(m => {
+    const d = document.createElement('div');
+    d.textContent = `${m.title}${m.year ? ' (' + m.year + ')' : ''} · ${m.cat} · ${m.score || '—'}`;
+    sm.append(d);
+  });
+  if(r.items.length > 8){ const d = document.createElement('div'); d.textContent = `… และอีก ${r.items.length - 8} เรื่อง`; sm.append(d); }
+  if(!r.items.length) sm.textContent = 'ไม่มีรายการใหม่ให้นำเข้า · ตรวจว่าแถวแรกเป็นหัวตาราง และมีคอลัมน์ชื่อหนัง';
+  $('#impInfo').hidden = true; $('#impPrev').hidden = false; $('#impOk').hidden = !r.items.length;
+  $('#impPick').textContent = 'เลือกไฟล์อื่น…';
+}
+$('#impOk').addEventListener('click', async () => {
+  if(!IMP || !IMP.items.length) return;
+  const items = IMP.items; $('#impOk').disabled = true;
+  try{
+    IMP.newCats.forEach(c => { EXTRA.cats[c] = CAT_PALETTE[(CATS.length) % CAT_PALETTE.length]; });
+    applyExtra({list:items, cats:EXTRA.cats});
+    await saveExtra();
+    refreshMovieUI(); impDlg.close();
+    toast(`นำเข้า ${items.length} เรื่องแล้ว` + (IMP.newCats.length ? ` · หมวดใหม่ ${IMP.newCats.length}` : ''), 3500);
+  }catch(err){ console.error(err); toast('บันทึกไม่สำเร็จ · รายการจะอยู่แค่ในหน้านี้จนกว่าจะปิด', 4500); refreshMovieUI(); impDlg.close(); }
+  finally{ $('#impOk').disabled = false; }
+});
+$('#impClear').addEventListener('click', async () => {
+  if(!EXTRA.list.length || !confirm(`ลบหนังที่นำเข้าทั้งหมด ${EXTRA.list.length} เรื่อง? (รายการเดิมของโปรแกรมไม่ถูกลบ)`)) return;
+  const ids = new Set(EXTRA.list.map(m => m.id));
+  for(let i = MOVIES.length - 1; i >= 0; i--) if(ids.has(MOVIES[i].id)){ delete MOVIE_ALIASES[MOVIES[i].id]; MOVIES.splice(i, 1); }
+  Object.keys(EXTRA.cats).forEach(c => { const i = CATS.indexOf(c); if(i > -1) CATS.splice(i, 1); delete CAT_COLOR[c]; });
+  EXTRA.list = []; EXTRA.cats = {};
+  if(typeof MV !== 'undefined' && MV.cat !== 'all' && !CATS.includes(MV.cat)) MV.cat = 'all';
+  try{ await saveExtra(); }catch(e){}
+  refreshMovieUI(); impDlg.close(); toast('ลบหนังที่นำเข้าแล้ว');
+});
+
 document.fonts.addEventListener('loadingdone', () => { invalidate(); drawAllThumbs(); });
 window.addEventListener('resize', invalidate);
 (async function init(){
   $('#movieList').replaceChildren(...MOVIES.map(m => el('option', {value:m.label})));
   syncStage(); renderInspector();
   try{ await DB.open(); }catch(e){ DB.db = null; }
+  await loadExtraMovies();
   try{
     const rec = DB.db ? await DB.get('meta', 'logo') : null;
     S.logoImg = rec && rec.blob ? await blobToImg(rec.blob) : await srcToImg(DEFAULT_LOGO);
