@@ -232,6 +232,39 @@
   .mv-card .mc{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
   .mv-body .btns{align-items:center;}
 
+  /* Facebook Planner */
+  #viewPlanner{max-width:1280px; margin:0 auto; padding:0 16px 40px;}
+  .plannerHero{margin-top:6px;}
+  .plannerActions{display:flex; gap:8px; flex-wrap:wrap;}
+  .plannerSettings{display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-bottom:14px;}
+  .plannerField{display:flex; flex-direction:column; gap:5px; min-width:110px;}
+  .plannerField.wide{flex:1 1 360px;}
+  .plannerField label{font-size:.75rem; color:var(--muted);}
+  .plannerField input{width:100%;}
+  .plannerTimes{display:flex; gap:6px; flex-wrap:wrap;}
+  .plannerTime{display:flex; align-items:center; gap:5px; border:1px solid var(--line); background:var(--panel2); border-radius:9px; padding:6px 9px; font-size:.8rem;}
+  .plannerTime input{width:auto;}
+  .plannerCheck{padding-bottom:8px;}
+  .plannerToolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
+  .plannerDay{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:12px;}
+  .plannerDayHead{display:flex; align-items:center; gap:10px; margin-bottom:10px;}
+  .plannerDayHead strong{font-size:.95rem;}
+  .plannerDayHead .hint{margin-left:auto;}
+  .plannerPosts{display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:10px;}
+  .plannerPost{display:grid; grid-template-columns:64px minmax(0,1fr); gap:10px; padding:9px; border:1px solid var(--line); border-radius:11px; background:var(--panel2);}
+  .plannerPoster{width:64px; aspect-ratio:2/3; border-radius:7px; overflow:hidden; background:#080808; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:1.3rem;}
+  .plannerPoster img{width:100%; height:100%; object-fit:cover;}
+  .plannerPostMain{min-width:0;}
+  .plannerPostTop{display:flex; gap:7px; align-items:center;}
+  .plannerPostTop time{font-weight:800; color:var(--accent2); font-size:.8rem;}
+  .plannerStatus{margin-left:auto; font-size:.64rem; border-radius:999px; padding:2px 7px; background:#332b27; color:var(--muted);}
+  .plannerStatus.ready{background:#173d28; color:#8be0aa;}
+  .plannerTitle{font-weight:800; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .plannerMeta{font-size:.7rem; color:var(--muted); margin-top:2px;}
+  .plannerCaption{font-size:.72rem; color:var(--muted); margin-top:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4;}
+  .plannerBtns{display:flex; gap:5px; flex-wrap:wrap; margin-top:7px;}
+  .plannerBtns button{font-size:.68rem; padding:5px 8px;}
+  .plannerEmpty{padding:55px 20px; text-align:center; color:var(--muted); border:1px dashed var(--line); border-radius:14px;}
   @media (max-width:1000px){
     #viewEditor{grid-template-columns:1fr;}
     .stage{order:1;} .strip{order:2;} .inspector{order:3;}
@@ -310,6 +343,10 @@
     <button type="button" data-view="library">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
       <span>คลังภาพ <span id="libCount"></span></span>
+    </button>
+    <button type="button" data-view="planner">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M7.5 3v4M16.5 3v4M3.5 9h17M8 13h3M13 13h3M8 17h3"/></svg>
+      <span>Planner <span id="plannerCount"></span></span>
     </button>
     <button type="button" class="fb" data-view="fb">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
@@ -410,6 +447,33 @@
     <label class="check"><input type="checkbox" id="mvHideDone"> ซ่อนเรื่องที่ทำแล้ว</label>
   </div>
   <div id="mvBody"></div>
+</main>
+
+<!-- ============ FACEBOOK PLANNER ============ -->
+<main id="viewPlanner" hidden>
+  <section class="hero plannerHero">
+    <div>
+      <h2>📅 Facebook Planner</h2>
+      <div class="hint" id="plannerSub">วางแผนโพสต์จากรายการหนังในระบบ โดยยังไม่ส่ง Facebook</div>
+    </div>
+    <div class="plannerActions">
+      <button type="button" class="secondary" id="plannerClearBtn">ล้างแพลน</button>
+      <button type="button" id="plannerGenerateBtn">✨ สร้างแพลน 30 วัน</button>
+    </div>
+  </section>
+  <section class="plannerSettings panel">
+    <div class="plannerField"><label for="plannerDays">จำนวนวัน</label><input id="plannerDays" type="number" min="1" max="90" value="30"></div>
+    <div class="plannerField"><label for="plannerPerDay">โพสต์/วัน</label><input id="plannerPerDay" type="number" min="1" max="6" value="3"></div>
+    <div class="plannerField wide"><label>เวลาโพสต์</label><div id="plannerTimes" class="plannerTimes"></div></div>
+    <label class="check plannerCheck"><input type="checkbox" id="plannerNoRepeat" checked> ไม่ใช้หนังที่อยู่ในแพลนแล้วซ้ำ</label>
+    <label class="check plannerCheck"><input type="checkbox" id="plannerRotateCat" checked> สลับหมวดหนัง</label>
+    <label class="check plannerCheck"><input type="checkbox" id="plannerHighAtNight" checked> คะแนนสูงไว้ช่วงค่ำ</label>
+  </section>
+  <div class="plannerToolbar">
+    <div class="chips" id="plannerChips"></div>
+    <div class="hint" id="plannerStats"></div>
+  </div>
+  <div id="plannerBody"></div>
 </main>
 
 <!-- ============ LIBRARY ============ -->
@@ -1949,15 +2013,131 @@ $('#homeQ').addEventListener('input', e => { H.q = e.target.value; renderHome();
 $('#homeSort').addEventListener('change', e => { H.sort = e.target.value; renderHome(); });
 
 /* ================================================================
+   Facebook Planner — วางแผนจาก MOVIES + บันทึกลง Vercel Blob ผ่าน meta
+================================================================ */
+const PLANNER_KEY = 'facebook_planner_v1';
+const PLANNER_DEF = {
+  days:30, perDay:3, times:['12:00','18:30','21:00'], noRepeat:true,
+  rotateCat:true, highAtNight:true, startDate:null, entries:[]
+};
+let PLANNER = {...PLANNER_DEF};
+function plannerToday(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+function plannerDateKey(d){ return d.toISOString().slice(0,10); }
+function plannerLoad(){
+  try{ PLANNER = {...PLANNER_DEF, ...(JSON.parse(localStorage.getItem(PLANNER_KEY)||'{}'))}; }catch(e){ PLANNER={...PLANNER_DEF}; }
+  if(!Array.isArray(PLANNER.times)||!PLANNER.times.length) PLANNER.times=PLANNER_DEF.times.slice();
+  if(!Array.isArray(PLANNER.entries)) PLANNER.entries=[];
+}
+async function plannerSave(){
+  try{ localStorage.setItem(PLANNER_KEY, JSON.stringify(PLANNER)); }catch(e){}
+  if(DB.db){ try{ await DB.put('meta',{k:'facebook_planner', ...PLANNER}); }catch(e){ console.warn('planner blob save',e); } }
+}
+async function plannerLoadRemote(){
+  if(!DB.db) return;
+  try{ const r=await DB.get('meta','facebook_planner'); if(r && Array.isArray(r.entries)){ PLANNER={...PLANNER_DEF,...r}; localStorage.setItem(PLANNER_KEY,JSON.stringify(PLANNER)); } }catch(e){}
+}
+function plannerMovie(id){ return MOVIES.find(m=>String(m.id)===String(id)); }
+function plannerFormatDate(s){ return new Date(s+'T00:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short',year:'numeric'}); }
+function plannerCover(m){ return (typeof coverSrc==='function' ? coverSrc(m) : null) || (typeof COVER_URL!=='undefined' ? COVER_URL[m.id] : null) || null; }
+function plannerCaption(m){ return fbPost(m); }
+function plannerRenderTimes(){
+  const host=$('#plannerTimes'); host.replaceChildren();
+  PLANNER.times.forEach((t,i)=>{
+    const wrap=el('label',{class:'plannerTime'}, el('input',{type:'time',value:t,on:{change:e=>{PLANNER.times[i]=e.target.value; plannerSave();}}}), el('span',{textContent:t}));
+    const inp=wrap.querySelector('input'); inp.addEventListener('change',()=>{wrap.querySelector('span').textContent=inp.value;}); host.append(wrap);
+  });
+}
+function plannerRenderChips(){
+  const host=$('#plannerChips'); host.replaceChildren();
+  const cats=['all',...CATS];
+  const active=window.PLANNER_CAT||'all';
+  cats.forEach(c=>host.append(el('button',{type:'button',class:'chip'+(active===c?' on':''),textContent:c==='all'?'ทุกหมวด':c,on:{click:()=>{window.PLANNER_CAT=c; plannerRender();}}})));
+}
+function plannerEntryPoster(e){ const m=plannerMovie(e.movieId); return e.imageUrl || (m&&plannerCover(m)); }
+function plannerRender(){
+  $('#plannerDays').value=PLANNER.days; $('#plannerPerDay').value=PLANNER.perDay;
+  $('#plannerNoRepeat').checked=!!PLANNER.noRepeat; $('#plannerRotateCat').checked=!!PLANNER.rotateCat; $('#plannerHighAtNight').checked=!!PLANNER.highAtNight;
+  plannerRenderTimes(); plannerRenderChips();
+  const entries=PLANNER.entries.slice().sort((a,b)=>(a.scheduledAt||'').localeCompare(b.scheduledAt||''));
+  const filtered=entries.filter(e=>window.PLANNER_CAT==='all'||!window.PLANNER_CAT||plannerMovie(e.movieId)?.cat===window.PLANNER_CAT);
+  $('#plannerStats').textContent=`${filtered.length} โพสต์ · ${new Set(filtered.map(e=>e.date)).size} วัน`;
+  $('#plannerSub').textContent=entries.length?`มีแพลน ${entries.length} โพสต์ · ยังไม่ส่ง Facebook`: 'ยังไม่มีแพลน — กด “สร้างแพลน 30 วัน”';
+  $('#plannerCount').textContent=entries.length?`(${entries.length})`:'';
+  const body=$('#plannerBody'); body.replaceChildren();
+  if(!filtered.length){ body.append(el('div',{class:'plannerEmpty'},el('div',{textContent:'📅'}),el('p',{textContent:'ยังไม่มีรายการใน Planner'}),el('button',{type:'button',textContent:'✨ สร้างแพลน 30 วัน',on:{click:plannerGenerate}}))); return; }
+  const byDate={}; filtered.forEach(e=>(byDate[e.date]??=[]).push(e));
+  Object.keys(byDate).sort().forEach(date=>{
+    const posts=byDate[date];
+    const day=el('section',{class:'plannerDay'});
+    const head=el('div',{class:'plannerDayHead'},el('strong',{textContent:plannerFormatDate(date)}),el('span',{class:'hint',textContent:`${posts.length} โพสต์`}));
+    const grid=el('div',{class:'plannerPosts'});
+    posts.forEach(e=>{
+      const m=plannerMovie(e.movieId)||{title:'หนังถูกลบ',cat:'',score:'',caption:''};
+      const poster=el('div',{class:'plannerPoster',textContent:'🎬'}); const src=plannerEntryPoster(e); if(src){ const im=el('img',{src,alt:'',loading:'lazy'}); im.onerror=()=>im.remove(); poster.replaceChildren(im); }
+      const status=el('span',{class:'plannerStatus '+(e.status==='ready'?'ready':''),textContent:e.status==='ready'?'พร้อมส่ง':'ร่าง'});
+      const main=el('div',{class:'plannerPostMain'},el('div',{class:'plannerPostTop'},el('time',{textContent:e.time}),status),el('div',{class:'plannerTitle',title:m.title,textContent:m.title}),el('div',{class:'plannerMeta',textContent:`${m.cat||'ไม่ระบุหมวด'} · ⭐ ${m.score||'-'}`}),el('div',{class:'plannerCaption',textContent:e.caption||plannerCaption(m)}));
+      const btns=el('div',{class:'plannerBtns'});
+      btns.append(el('button',{type:'button',class:'secondary small',textContent:'📝 แก้เวลา',on:{click:()=>plannerEditTime(e.id)}}),el('button',{type:'button',class:'secondary small',textContent:'🔄 เปลี่ยนหนัง',on:{click:()=>plannerSwap(e.id)}}),el('button',{type:'button',class:'danger small',textContent:'ลบ',on:{click:()=>plannerDelete(e.id)}}));
+      main.append(btns); grid.append(el('article',{class:'plannerPost'},poster,main));
+    });
+    day.append(head,grid); body.append(day);
+  });
+}
+function plannerEditTime(id){
+  const e=PLANNER.entries.find(x=>x.id===id); if(!e) return;
+  const t=prompt('เวลาใหม่ (HH:MM)',e.time); if(!t||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(t)) return;
+  e.time=t; e.scheduledAt=e.date+'T'+t; e.updatedAt=Date.now(); e.status='ready'; plannerSave().then(plannerRender);
+}
+function plannerSwap(id){
+  const e=PLANNER.entries.find(x=>x.id===id); if(!e) return;
+  const m=plannerMovie(e.movieId); const q=prompt('พิมพ์ชื่อหนังที่ต้องการแทน',m?.title||''); if(!q) return;
+  const found=MOVIES.find(x=>x.title.toLowerCase().includes(q.toLowerCase())); if(!found){toast('ไม่พบหนังที่ต้องการ');return;}
+  if(PLANNER.entries.some(x=>x.id!==id&&String(x.movieId)===String(found.id)&&x.date===e.date)){toast('หนังเรื่องนี้อยู่ในวันเดียวกันแล้ว');return;}
+  e.movieId=found.id; e.caption=plannerCaption(found); e.imageUrl=plannerCover(found)||null; e.updatedAt=Date.now(); e.status='ready'; plannerSave().then(plannerRender);
+}
+function plannerDelete(id){ PLANNER.entries=PLANNER.entries.filter(x=>x.id!==id); plannerSave().then(plannerRender); }
+function plannerGenerate(){
+  const days=Math.max(1,Math.min(90,+$('#plannerDays').value||30));
+  const perDay=Math.max(1,Math.min(6,+$('#plannerPerDay').value||3));
+  const times=PLANNER.times.slice().filter(Boolean).sort(); while(times.length<perDay){ times.push(['12:00','15:30','18:30','21:00','22:00'][times.length]||'12:00'); }
+  const start=PLANNER.startDate?new Date(PLANNER.startDate+'T00:00:00'):plannerToday();
+  const existingIds=new Set(PLANNER.entries.map(e=>String(e.movieId)));
+  const pool=MOVIES.filter(m=>m && !m.deleted && (!PLANNER.noRepeat || !existingIds.has(String(m.id))));
+  if(!pool.length){toast('ไม่มีหนังที่ยังวางแพลนได้');return;}
+  const sorted=pool.slice().sort((a,b)=>(parseFloat(String(b.score).replace(/[^\d.]/g,''))||0)-(parseFloat(String(a.score).replace(/[^\d.]/g,''))||0));
+  const result=[]; let cursor=0, catCursor=0; const cats=[...new Set(sorted.map(m=>m.cat).filter(Boolean))];
+  for(let d=0;d<days;d++){
+    const date=new Date(start); date.setDate(start.getDate()+d); const ds=plannerDateKey(date);
+    for(let j=0;j<perDay;j++){
+      let candidates=sorted.filter(m=>!result.some(e=>String(e.movieId)===String(m.id)) && (!PLANNER.noRepeat || !existingIds.has(String(m.id))));
+      if(!candidates.length) break;
+      let m;
+      if(PLANNER.rotateCat && cats.length){ const wanted=cats[catCursor%cats.length]; m=candidates.find(x=>x.cat===wanted)||candidates[0]; catCursor++; }
+      else m=candidates[0];
+      // Keep high-score movies in evening slots without changing the category rotation.
+      if(PLANNER.highAtNight && j>=perDay-1){ const top=candidates.filter(x=>parseFloat(String(x.score).replace(/[^\d.]/g,''))>=8.5); if(top.length) m=top[0]; }
+      result.push({id:'pl_'+Date.now()+'_'+result.length,movieId:m.id,date:ds,time:times[j],scheduledAt:ds+'T'+times[j],caption:plannerCaption(m),imageUrl:plannerCover(m)||null,status:'ready',createdAt:Date.now(),updatedAt:Date.now()});
+    }
+  }
+  PLANNER.entries=[...PLANNER.entries,...result]; PLANNER.days=days; PLANNER.perDay=perDay; PLANNER.startDate=plannerDateKey(start);
+  plannerSave().then(()=>{plannerRender();toast(`สร้างแพลนเพิ่ม ${result.length} โพสต์แล้ว`);});
+}
+$('#plannerGenerateBtn')?.addEventListener('click',plannerGenerate);
+$('#plannerClearBtn')?.addEventListener('click',()=>{if(confirm('ล้างแพลนทั้งหมด?')){PLANNER.entries=[];plannerSave().then(plannerRender);}});
+$('#plannerDays')?.addEventListener('change',e=>{PLANNER.days=+e.target.value||30;plannerSave();});
+$('#plannerPerDay')?.addEventListener('change',e=>{PLANNER.perDay=+e.target.value||3;plannerSave();});
+['plannerNoRepeat','plannerRotateCat','plannerHighAtNight'].forEach(id=>$('#'+id)?.addEventListener('change',e=>{PLANNER[id.replace('planner','').replace('NoRepeat','NoRepeat').replace('RotateCat','RotateCat').replace('HighAtNight','HighAtNight').replace(/^./,x=>x.toLowerCase())]=e.target.checked; plannerSave();}));
+
+/* ================================================================
    สลับหน้า
 ================================================================ */
 function switchView(v){
   S.view = v;
-  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library'; $('#viewMovies').hidden = v !== 'movies'; $('#viewFb').hidden = v !== 'fb';
+  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library'; $('#viewMovies').hidden = v !== 'movies'; $('#viewFb').hidden = v !== 'fb'; $('#viewPlanner').hidden = v !== 'planner';
   $('#tabs').classList.toggle('fbmode', v === 'fb');
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   moveBlob();
-  if(v === 'library') renderLibrary(); else if(v === 'fb') renderFb(); else if(v === 'home') loadHome(); else if(v === 'movies') loadCustomCovers().then(renderMovies); else invalidate();
+  if(v === 'library') renderLibrary(); else if(v === 'fb') renderFb(); else if(v === 'planner') plannerRender(); else if(v === 'home') loadHome(); else if(v === 'movies') loadCustomCovers().then(renderMovies); else invalidate();
 }
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 function moveBlob(instant){
@@ -2492,6 +2672,8 @@ window.addEventListener('resize', invalidate);
   syncStage(); renderInspector();
   try{ await DB.open(); }catch(e){ DB.db = null; }
   await loadExtraMovies();
+  plannerLoad();
+  await plannerLoadRemote();
   try{
     const rec = DB.db ? await DB.get('meta', 'logo') : null;
     S.logoImg = rec && rec.blob ? await blobToImg(rec.blob) : await srcToImg(DEFAULT_LOGO);
