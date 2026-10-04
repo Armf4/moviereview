@@ -492,7 +492,7 @@
     <section class="setsec">
       <h4>📘 โพสต์ Facebook</h4>
       <div>
-        <label for="setFbUrl">ลิงก์ปลายทางของปุ่ม “โพสต์ Facebook”</label>
+        <label for="setFbUrl">ลิงก์ปลายทางของปุ่ม “Facebook”</label>
         <input type="text" id="setFbUrl" placeholder="เว้นว่าง = Meta Business Suite ของเพจ (หน้าสร้างโพสต์)" autocomplete="off">
         <div class="hint">ใส่ลิงก์ที่ขึ้นต้นด้วย https://www.facebook.com/… หรือ https://business.facebook.com/… เช่น หน้า content calendar</div>
       </div>
@@ -1777,8 +1777,7 @@ function postButtons(it, host, onChange){
   }}});
   paint(posted);
   return [
-    el('button', {type:'button', class:'secondary small', textContent:'📋 คัดลอกแคปชั่น+แฮชแท็ก', on:{click:() => copyText(fbPost(itemMovie(it)), 'คัดลอกแคปชั่น+แฮชแท็กแล้ว')}}),
-    el('button', {type:'button', class:'small fbbtn', textContent:'📘 โพสต์ Facebook', title:'คัดลอกแคปชั่น + โหลดรูป + เปิด Business Suite', on:{click:() => postToFacebook(it, onChange)}}),
+    el('button', {type:'button', class:'small fbbtn', textContent:'Facebook', title:'คัดลอกแคปชั่น + โหลดรูป + เปิด Business Suite', on:{click:() => postToFacebook(it, onChange)}}),
     posted
   ];
 }
@@ -1832,7 +1831,7 @@ async function renderFb(){
 
   if(!FBV.folder){
     head.append(el('h2', {textContent:`Facebook — โพสต์ลงเพจแล้ว${items.length ? ' (' + items.length + ')' : ''}`}));
-    if(!items.length){ body.append(el('div', {class:'empty', textContent:'ยังไม่มีรูปที่โพสต์ลงเพจ — กดปุ่ม “📘 โพสต์ Facebook” ที่หน้าแรก รูปจะมาอยู่ที่นี่'})); return; }
+    if(!items.length){ body.append(el('div', {class:'empty', textContent:'ยังไม่มีรูปที่โพสต์ลงเพจ — กดปุ่ม “Facebook” ที่หน้าแรก รูปจะมาอยู่ที่นี่'})); return; }
     const grid = el('div', {class:'grid'});
     withPosts.sort((a, b) => b.createdAt - a.createdAt).forEach(f => {
       const its = items.filter(i => i.folderId === f.id);
@@ -1864,7 +1863,7 @@ async function renderFb(){
       el('div', {class:'btns'},
         el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}),
         el('button', {type:'button', class:'secondary small', textContent:'แก้ไขต่อ', on:{click:() => editItem(it)}}),
-        postButtons(it, cover, () => keepScroll(renderFb))[2])));
+        postButtons(it, cover, () => keepScroll(renderFb))[1])));
   });
   body.append(grid);
 }
