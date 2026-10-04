@@ -53,7 +53,7 @@
   /* liquid navbar */
   .tabs{
     position:fixed; left:50%; bottom:calc(10px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%); z-index:40;
-    width:min(420px, calc(100% - 24px)); display:flex; padding:4px; border-radius:999px;
+    width:min(540px, calc(100% - 24px)); display:flex; padding:4px; border-radius:999px;
     background:rgba(28,19,17,.62); -webkit-backdrop-filter:blur(16px) saturate(1.5); backdrop-filter:blur(16px) saturate(1.5);
     border:1px solid rgba(255,255,255,.1); box-shadow:0 10px 32px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.07);
     --x:4px; --w:100px;
@@ -78,6 +78,13 @@
   .tabs button:hover{filter:none; color:var(--text);}
   .tabs button svg{width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; transition:transform .45s cubic-bezier(.34,1.7,.55,1);}
   .tabs button.on{color:#fff;}
+  .tabs button.fb{color:#1877f2;}
+  .tabs button.fb svg{fill:currentColor; stroke:none; width:19px; height:19px; margin-bottom:-1px;}
+  .tabs button.fb:hover{color:#4599ff;}
+  .tabs button.fb.on{color:#fff;}
+  .tabs.fbmode .blob{background:radial-gradient(120% 140% at 50% 30%, #4aa0ff 0%, #1877f2 55%, #0b57c9 100%);}
+  .tabs.fbmode .glow{background:#1877f2;}
+  #viewFb{max-width:1280px; margin:0 auto; padding:0 16px 40px;}
   .tabs button.on svg{transform:translateY(-1px) scale(1.14);}
 
   .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px;}
@@ -164,6 +171,12 @@
   dialog::backdrop{background:rgba(0,0,0,.68);}
   dialog form{display:flex; flex-direction:column; gap:12px;}
   dialog#viewDlg{width:min(560px,94vw);}
+  .gear{position:absolute; top:calc(14px + env(safe-area-inset-top,0px)); right:14px; z-index:30; width:42px; height:42px; padding:0; border-radius:50%; background:#2a1e1c; border:1px solid var(--line); display:grid; place-items:center; color:var(--text);}
+  .gear svg{width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; transition:transform .5s;}
+  .gear:hover svg{transform:rotate(60deg);}
+  dialog#setDlg{width:min(480px,94vw); max-height:90vh; overflow:auto;}
+  .setsec{display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--panel2);}
+  .setsec h4{margin:0; font-size:.85rem; color:var(--accent2);}
   dialog#impDlg{width:min(520px,94vw); max-height:90vh; overflow:auto;}
   #impDlg h3{font-size:1.05rem; margin:0;}
   #impDlg ul{margin:6px 0 0 18px; padding:0; font-size:.82rem; color:var(--muted); line-height:1.7;}
@@ -271,6 +284,7 @@
 <body>
 
 <header class="top">
+  <button type="button" class="gear" id="settingsBtn" aria-label="ตั้งค่า" title="ตั้งค่า"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   <div class="brand">
     <img id="brandLogo" src="" alt="โลโก้">
     <div>
@@ -297,6 +311,10 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></svg>
       <span>คลังภาพ <span id="libCount"></span></span>
     </button>
+    <button type="button" class="fb" data-view="fb">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+      <span>Facebook <span id="fbCount"></span></span>
+    </button>
   </nav>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
     <filter id="goo" x="-10%" y="-30%" width="120%" height="160%" color-interpolation-filters="sRGB">
@@ -317,7 +335,6 @@
   </section>
   <div class="homebar">
     <div class="chips" id="homeChips"></div>
-    <button type="button" class="secondary small" id="fbSetPage" title="ตั้งลิงก์ปลายทางของปุ่มโพสต์ (เว้นว่าง = ใช้ Meta Business Suite)">📘 ตั้งลิงก์เพจ</button>
     <select id="homeSort" aria-label="เรียงลำดับ">
       <option value="new">ใหม่ล่าสุดก่อน</option>
       <option value="old">เก่าสุดก่อน</option>
@@ -396,6 +413,11 @@
 </main>
 
 <!-- ============ LIBRARY ============ -->
+<main id="viewFb" hidden>
+  <div class="libhead" id="fbHead"></div>
+  <div id="fbBody"></div>
+</main>
+
 <main id="viewLibrary" hidden>
   <div class="libhead" id="libHead"></div>
   <div id="libBody"></div>
@@ -461,6 +483,38 @@
   <form method="dialog">
     <img id="viewImg" alt="ตัวอย่างภาพ">
     <div class="row end"><button class="secondary">ปิด</button></div>
+  </form>
+</dialog>
+
+<dialog id="setDlg">
+  <form method="dialog" onsubmit="return false">
+    <h3>⚙ ตั้งค่า</h3>
+    <section class="setsec">
+      <h4>📘 โพสต์ Facebook</h4>
+      <div>
+        <label for="setFbUrl">ลิงก์ปลายทางของปุ่ม “โพสต์ Facebook”</label>
+        <input type="text" id="setFbUrl" placeholder="เว้นว่าง = Meta Business Suite ของเพจ (หน้าสร้างโพสต์)" autocomplete="off">
+        <div class="hint">ใส่ลิงก์ที่ขึ้นต้นด้วย https://www.facebook.com/… หรือ https://business.facebook.com/… เช่น หน้า content calendar</div>
+      </div>
+      <label class="opt"><input type="checkbox" id="setFbCopy"> คัดลอกแคปชั่น + แฮชแท็กให้อัตโนมัติ</label>
+      <label class="opt"><input type="checkbox" id="setFbDownload"> ดาวน์โหลดรูปโปสเตอร์ให้อัตโนมัติ</label>
+      <label class="opt"><input type="checkbox" id="setFbMark"> ย้ายไป “โพสต์ลงเพจแล้ว” อัตโนมัติหลังกดปุ่ม</label>
+    </section>
+    <section class="setsec">
+      <h4>🏠 หน้าแรก</h4>
+      <label for="setHomeFilter">แสดงอะไรเป็นค่าเริ่มต้นเมื่อเปิดโปรแกรม</label>
+      <select id="setHomeFilter"><option value="no">เฉพาะที่ยังไม่ได้โพสต์</option><option value="all">ทั้งหมด</option></select>
+    </section>
+    <section class="setsec">
+      <h4>🎬 โปสเตอร์ / คลังภาพ (ค่าเริ่มต้นตอนเปิดโปรแกรม)</h4>
+      <label class="opt"><input type="checkbox" id="setByCat"> แยกโฟลเดอร์ตามประเภทหนังอัตโนมัติ</label>
+      <label class="opt"><input type="checkbox" id="setCatColor"> ใช้สีแถบตามประเภทหนัง</label>
+    </section>
+    <div class="row end">
+      <button type="button" class="secondary" id="setReset">คืนค่าเริ่มต้น</button>
+      <button type="button" class="secondary" id="setCancel">ปิด</button>
+      <button type="button" id="setOk">บันทึก</button>
+    </div>
   </form>
 </dialog>
 
@@ -1572,6 +1626,7 @@ $('#sdOk').addEventListener('click', async () => {
 const L = {folder:null};
 async function refreshLibCount(){
   try{ const n = (await DB.all('items')).length; $('#libCount').textContent = n ? `(${n})` : ''; }catch(e){}
+  updateFbCount();
 }
 async function renderLibrary(){
   const head = $('#libHead'), body = $('#libBody'); head.replaceChildren(); body.replaceChildren();
@@ -1677,18 +1732,10 @@ function itemMovie(it){
 }
 const BIZ_COMPOSER = 'https://business.facebook.com/latest/composer?asset_id=1221243601083021';  // Meta Business Suite ของเพจ
 const fbPageUrl = () => { try{ return localStorage.getItem('fbPageUrl') || ''; }catch(e){ return ''; } };
-$('#fbSetPage').addEventListener('click', () => {
-  const v = prompt('ใส่ลิงก์ปลายทางของปุ่มโพสต์ (เช่น ลิงก์เพจ หรือ Business Suite)\n(เว้นว่างเพื่อใช้ Meta Business Suite ของเพจเริ่มต้น)', fbPageUrl());
-  if(v === null) return;
-  const u = v.trim();
-  if(u && !/^https?:\/\/([\w-]+\.)*(facebook|fb)\.com\//i.test(u)){ toast('ลิงก์ต้องขึ้นต้นด้วย https://www.facebook.com/…', 3500); return; }
-  try{ u ? localStorage.setItem('fbPageUrl', u) : localStorage.removeItem('fbPageUrl'); }catch(e){}
-  toast(u ? 'บันทึกลิงก์เพจแล้ว' : 'ล้างลิงก์เพจแล้ว');
-});
 async function postToFacebook(it, onChange){
   const text = fbPost(itemMovie(it));
-  const done = async () => { try{ if(!it.posted){ await setPosted(it, true); toast('ย้ายไปโพสต์ลงเพจแล้ว ✓ (กดปุ่ม ✅ เพื่อยกเลิกได้)', 3500); } if(onChange) onChange(); }catch(e){ toast('บันทึกสถานะไม่สำเร็จ', 3500); } };
-  await copyText(text, 'คัดลอกแคปชั่น+แฮชแท็กแล้ว');
+  const done = async () => { try{ if(SET.fbMark && !it.posted){ await setPosted(it, true); toast('ย้ายไปโพสต์ลงเพจแล้ว ✓ (กดปุ่ม ✅ เพื่อยกเลิกได้)', 3500); } if(onChange) onChange(); }catch(e){ toast('บันทึกสถานะไม่สำเร็จ', 3500); } };
+  if(SET.fbCopy) await copyText(text, 'คัดลอกแคปชั่น+แฮชแท็กแล้ว');
   // มือถือ: เปิดเมนูแชร์พร้อมรูป (เลือก Facebook ได้) · คอมพิวเตอร์: เปิดหน้า Facebook ให้วางข้อความ
   if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.canShare){
     try{
@@ -1699,9 +1746,9 @@ async function postToFacebook(it, onChange){
       }
     }catch(e){ if(e && e.name === 'AbortError') return; }
   }
-  try{ await dlItem(it); }catch(e){ toast('ดาวน์โหลดรูปไม่สำเร็จ · กดปุ่มดาวน์โหลดเอง', 3500); }
+  if(SET.fbDownload) try{ await dlItem(it); }catch(e){ toast('ดาวน์โหลดรูปไม่สำเร็จ · กดปุ่มดาวน์โหลดเอง', 3500); }
   window.open(fbPageUrl() || BIZ_COMPOSER, '_blank', 'noopener');
-  toast('คัดลอกข้อความ + โหลดรูปแล้ว · วางแคปชั่น เลือกรูปที่โหลดไว้ แล้วตั้งเวลาใน Business Suite', 5500);
+  toast('เปิด Business Suite แล้ว' + (SET.fbCopy ? ' · คัดลอกข้อความแล้ว' : '') + (SET.fbDownload ? ' · โหลดรูปแล้ว' : '') + ' · ตั้งเวลาโพสต์ได้เลย', 5500);
   await done();
 }
 async function setPosted(it, v){
@@ -1709,6 +1756,7 @@ async function setPosted(it, v){
   rec.posted = v; rec.postedAt = v ? Date.now() : null;
   await DB.put('items', rec);
   it.posted = v; it.postedAt = rec.postedAt;
+  updateFbCount();
   const h = H.items.find(x => x.id === it.id); if(h){ h.posted = v; h.postedAt = rec.postedAt; }
 }
 // ปุ่ม 3 อัน: คัดลอกแคปชั่น+แฮชแท็ก · โพสต์ไปยัง Facebook · โพสต์ลงเพจแล้ว (สลับสถานะ)
@@ -1739,7 +1787,89 @@ function keepScroll(fn){ const y = window.scrollY; fn(); window.scrollTo(0, y); 
 /* ================================================================
    หน้าแรก — โชว์ผลงานทั้งหมดจากคลัง + ค้นหาชื่อหนัง
 ================================================================ */
-const H = {items:[], folders:[], q:'', folder:'all', sort:'new', post:'no'};
+// ============ ตั้งค่า (เก็บในเบราว์เซอร์เครื่องนี้) ============
+const SET_KEY = 'appSettings';
+const SET_DEF = {fbCopy:true, fbDownload:true, fbMark:true, homeFilter:'no', byCat:true, catColor:false};
+function loadSet(){ try{ return {...SET_DEF, ...JSON.parse(localStorage.getItem(SET_KEY) || '{}')}; }catch(e){ return {...SET_DEF}; } }
+let SET = loadSet();
+const setDlg = $('#setDlg');
+function fillSettings(v, url){
+  $('#setFbUrl').value = url; $('#setFbCopy').checked = v.fbCopy; $('#setFbDownload').checked = v.fbDownload; $('#setFbMark').checked = v.fbMark;
+  $('#setHomeFilter').value = v.homeFilter; $('#setByCat').checked = v.byCat; $('#setCatColor').checked = v.catColor;
+}
+function applyCatColor(on){
+  const c = $('#catColor'); if(c.checked === on) return;
+  c.checked = on; c.dispatchEvent(new Event('change'));
+}
+$('#settingsBtn').addEventListener('click', () => { fillSettings(SET, fbPageUrl()); setDlg.showModal(); });
+$('#setCancel').addEventListener('click', () => setDlg.close());
+$('#setReset').addEventListener('click', () => fillSettings(SET_DEF, ''));
+$('#setOk').addEventListener('click', () => {
+  const u = $('#setFbUrl').value.trim();
+  if(u && !/^https?:\/\/([\w-]+\.)*(facebook|fb)\.com\//i.test(u)){ toast('ลิงก์ต้องขึ้นต้นด้วย https://www.facebook.com/… หรือ https://business.facebook.com/…', 4000); return; }
+  SET = {fbCopy:$('#setFbCopy').checked, fbDownload:$('#setFbDownload').checked, fbMark:$('#setFbMark').checked,
+    homeFilter:$('#setHomeFilter').value, byCat:$('#setByCat').checked, catColor:$('#setCatColor').checked};
+  try{ localStorage.setItem(SET_KEY, JSON.stringify(SET)); u ? localStorage.setItem('fbPageUrl', u) : localStorage.removeItem('fbPageUrl'); }catch(e){}
+  setByCat(SET.byCat); applyCatColor(SET.catColor); H.post = SET.homeFilter;
+  if(S.view === 'home') renderHome();
+  setDlg.close(); toast('บันทึกการตั้งค่าแล้ว');
+});
+setByCat(SET.byCat); S.catColor = SET.catColor; $('#catColor').checked = SET.catColor;
+
+// ============ แท็บ Facebook — รูปที่โพสต์ลงเพจแล้ว (แสดงเป็นโฟลเดอร์เหมือนคลังภาพ) ============
+const FBV = {folder:null};
+async function updateFbCount(){
+  try{ const n = (await DB.all('items')).filter(i => i.posted).length; $('#fbCount').textContent = n ? `(${n})` : ''; }catch(e){}
+}
+async function renderFb(){
+  const head = $('#fbHead'), body = $('#fbBody'); head.replaceChildren(); body.replaceChildren();
+  if(!DB.db){ body.append(el('div', {class:'empty', textContent:'เบราว์เซอร์นี้ไม่รองรับการบันทึกลงคลัง'})); return; }
+  const [folders, all] = await Promise.all([DB.all('folders'), DB.all('items')]);
+  const items = all.filter(i => i.posted).sort((a, b) => (b.postedAt || b.createdAt) - (a.postedAt || a.createdAt));
+  $('#fbCount').textContent = items.length ? `(${items.length})` : '';
+  const withPosts = folders.filter(f => items.some(i => i.folderId === f.id));
+  if(FBV.folder && !withPosts.some(f => f.id === FBV.folder)) FBV.folder = null;
+
+  if(!FBV.folder){
+    head.append(el('h2', {textContent:`Facebook — โพสต์ลงเพจแล้ว${items.length ? ' (' + items.length + ')' : ''}`}));
+    if(!items.length){ body.append(el('div', {class:'empty', textContent:'ยังไม่มีรูปที่โพสต์ลงเพจ — กดปุ่ม “📘 โพสต์ Facebook” ที่หน้าแรก รูปจะมาอยู่ที่นี่'})); return; }
+    const grid = el('div', {class:'grid'});
+    withPosts.sort((a, b) => b.createdAt - a.createdAt).forEach(f => {
+      const its = items.filter(i => i.folderId === f.id);
+      const open = () => { FBV.folder = f.id; renderFb(); };
+      const cover = el('div', {class:'cover', tabIndex:0, role:'button', 'aria-label':`เปิดโฟลเดอร์ ${f.name}`,
+        on:{click:open, keydown:ev => { if(ev.key === 'Enter') open(); }}}, el('img', {src:its[0].thumb, alt:''}));
+      grid.append(el('div', {class:'card'}, cover,
+        el('div', {class:'info'}, el('b', {textContent:f.name}), el('span', {textContent:`${its.length} รูป`})),
+        el('div', {class:'btns'},
+          el('button', {type:'button', class:'secondary small', textContent:'เปิด', on:{click:open}}),
+          el('button', {type:'button', class:'secondary small', textContent:'ZIP', on:{click:() => zipFolder(f, its)}}))));
+    });
+    body.append(grid);
+    return;
+  }
+
+  const f = folders.find(x => x.id === FBV.folder), its = items.filter(i => i.folderId === f.id);
+  head.append(
+    el('button', {type:'button', class:'secondary small', textContent:'← ทุกโฟลเดอร์', on:{click:() => { FBV.folder = null; renderFb(); }}}),
+    el('h2', {textContent:`${f.name} (${its.length})`}),
+    el('button', {type:'button', class:'small', textContent:'ดาวน์โหลดทั้งโฟลเดอร์ (ZIP)', on:{click:() => zipFolder(f, its)}}));
+  const grid = el('div', {class:'grid'});
+  its.forEach(it => {
+    const cover = el('div', {class:'cover', tabIndex:0, role:'button', 'aria-label':`ดูภาพ ${it.name}`,
+      on:{click:() => previewItem(it), keydown:ev => { if(ev.key === 'Enter') previewItem(it); }}}, el('img', {src:it.thumb, alt:it.name}));
+    const d = new Date(it.postedAt || it.createdAt).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
+    grid.append(el('div', {class:'card'}, cover,
+      el('div', {class:'info'}, el('b', {textContent:it.name}), el('span', {textContent:`โพสต์ ${d}`})),
+      el('div', {class:'btns'},
+        el('button', {type:'button', class:'secondary small', textContent:'ดาวน์โหลด', on:{click:() => dlItem(it)}}),
+        el('button', {type:'button', class:'secondary small', textContent:'แก้ไขต่อ', on:{click:() => editItem(it)}}),
+        postButtons(it, cover, () => keepScroll(renderFb))[2])));
+  });
+  body.append(grid);
+}
+
+const H = {items:[], folders:[], q:'', folder:'all', sort:'new', post:loadSet().homeFilter};
 async function loadHome(){
   if(DB.db){
     try{
@@ -1757,6 +1887,7 @@ async function loadHome(){
   if(H.folder !== 'all' && !H.folders.some(f => f.id === H.folder)) H.folder = 'all';
   renderHome();
   $('#libCount').textContent = H.items.length ? `(${H.items.length})` : '';
+  updateFbCount();
 }
 function renderHome(){
   const body = $('#homeBody'); body.replaceChildren();
@@ -1774,7 +1905,7 @@ function renderHome(){
   const inPost = i => H.post === 'all' || (H.post === 'yes') === !!i.posted;
   const mp = (id, label) => el('button', {type:'button', class:'chip' + (H.post === id ? ' on' : ''), textContent:label,
     on:{click:() => { H.post = id; renderHome(); }}});
-  chips.append(mp('no', `ยังไม่ได้โพสต์ (${total - nPosted})`), mp('yes', `โพสต์ลงเพจแล้ว (${nPosted})`), mp('all', `ทั้งหมด (${total})`));
+  chips.append(mp('no', `ยังไม่ได้โพสต์ (${total - nPosted})`), mp('all', `ทั้งหมด (${total})`));
   const mk = (id, label) => el('button', {type:'button', class:'chip' + (H.folder === id ? ' on' : ''), textContent:label,
     on:{click:() => { H.folder = id; renderHome(); }}});
   chips.append(el('span', {class:'hint', textContent:'|', style:'align-self:center'}),
@@ -1786,7 +1917,7 @@ function renderHome(){
   else list.sort((a, b) => H.sort === 'old' ? a.stamp - b.stamp : b.stamp - a.stamp);
   if(H.q.trim()) $('#homeSub').textContent = `พบ ${list.length} จาก ${total} รูป`;
 
-  if(!list.length){ body.append(el('div', {class:'empty', textContent:H.q.trim() ? `ไม่พบ “${H.q.trim()}”` : (H.post === 'yes' ? 'ยังไม่มีรูปที่โพสต์ลงเพจแล้ว' : H.post === 'no' ? 'โพสต์ครบทุกรูปแล้ว 🎉' : 'ไม่มีรูปในโฟลเดอร์นี้')})); return; }
+  if(!list.length){ body.append(el('div', {class:'empty', textContent:H.q.trim() ? `ไม่พบ “${H.q.trim()}”` : (H.post === 'no' ? 'โพสต์ครบทุกรูปแล้ว 🎉' : 'ไม่มีรูปในโฟลเดอร์นี้')})); return; }
   const wall = el('div', {class:'masonry'});
   list.forEach(it => {
     const date = new Date(it.stamp).toLocaleDateString('th-TH', {day:'numeric', month:'short', year:'2-digit'});
@@ -1810,10 +1941,11 @@ $('#homeSort').addEventListener('change', e => { H.sort = e.target.value; render
 ================================================================ */
 function switchView(v){
   S.view = v;
-  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library'; $('#viewMovies').hidden = v !== 'movies';
+  $('#viewHome').hidden = v !== 'home'; $('#viewEditor').hidden = v !== 'editor'; $('#viewLibrary').hidden = v !== 'library'; $('#viewMovies').hidden = v !== 'movies'; $('#viewFb').hidden = v !== 'fb';
+  $('#tabs').classList.toggle('fbmode', v === 'fb');
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   moveBlob();
-  if(v === 'library') renderLibrary(); else if(v === 'home') loadHome(); else if(v === 'movies') loadCustomCovers().then(renderMovies); else invalidate();
+  if(v === 'library') renderLibrary(); else if(v === 'fb') renderFb(); else if(v === 'home') loadHome(); else if(v === 'movies') loadCustomCovers().then(renderMovies); else invalidate();
 }
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 function moveBlob(instant){
