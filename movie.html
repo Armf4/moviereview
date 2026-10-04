@@ -317,7 +317,7 @@
   </section>
   <div class="homebar">
     <div class="chips" id="homeChips"></div>
-    <button type="button" class="secondary small" id="fbSetPage" title="ตั้งลิงก์เพจ Facebook สำหรับปุ่มโพสต์">📘 ตั้งลิงก์เพจ</button>
+    <button type="button" class="secondary small" id="fbSetPage" title="ตั้งลิงก์ปลายทางของปุ่มโพสต์ (เว้นว่าง = ใช้ Meta Business Suite)">📘 ตั้งลิงก์เพจ</button>
     <select id="homeSort" aria-label="เรียงลำดับ">
       <option value="new">ใหม่ล่าสุดก่อน</option>
       <option value="old">เก่าสุดก่อน</option>
@@ -1675,9 +1675,10 @@ function itemMovie(it){
   const t = ty => ((st.els || []).find(e => e.type === ty) || {}).text || '';
   return {id:0, title:t('title') || it.name, year:null, score:t('score'), caption:t('caption'), cat:st.cat || ''};
 }
+const BIZ_COMPOSER = 'https://business.facebook.com/latest/composer?asset_id=1221243601083021';  // Meta Business Suite ของเพจ
 const fbPageUrl = () => { try{ return localStorage.getItem('fbPageUrl') || ''; }catch(e){ return ''; } };
 $('#fbSetPage').addEventListener('click', () => {
-  const v = prompt('ใส่ลิงก์เพจ Facebook ของคุณ เช่น https://www.facebook.com/ชื่อเพจ\n(เว้นว่างเพื่อล้างค่า)', fbPageUrl());
+  const v = prompt('ใส่ลิงก์ปลายทางของปุ่มโพสต์ (เช่น ลิงก์เพจ หรือ Business Suite)\n(เว้นว่างเพื่อใช้ Meta Business Suite ของเพจเริ่มต้น)', fbPageUrl());
   if(v === null) return;
   const u = v.trim();
   if(u && !/^https?:\/\/([\w-]+\.)*(facebook|fb)\.com\//i.test(u)){ toast('ลิงก์ต้องขึ้นต้นด้วย https://www.facebook.com/…', 3500); return; }
@@ -1698,8 +1699,8 @@ async function postToFacebook(it, onChange){
       }
     }catch(e){ if(e && e.name === 'AbortError') return; }
   }
-  window.open(fbPageUrl() || 'https://www.facebook.com/', '_blank', 'noopener');
-  toast('คัดลอกแล้ว · วางในช่องโพสต์ และแนบรูปที่ดาวน์โหลดไว้', 4500);
+  window.open(fbPageUrl() || BIZ_COMPOSER, '_blank', 'noopener');
+  toast('คัดลอกแล้ว · เปิด Meta Business Suite แล้ว วางข้อความ แนบรูป แล้วตั้งเวลาโพสต์', 5000);
   await done();
 }
 async function setPosted(it, v){
